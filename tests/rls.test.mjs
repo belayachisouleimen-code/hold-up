@@ -1,0 +1,41 @@
+// Vérifie le schéma Supabase et ses règles RLS dans un Postgres embarqué : npm i @electric-sql/pglite && node tests/rls.test.mjs
+import { PGlite } from '@electric-sql/pglite';
+import fs from 'fs';
+const db = new PGlite();
+await db.exec(`
+create schema auth; create table auth.users(id uuid primary key);
+create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
+create role authenticated; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;
+create publication supabase_realtime;
+insert into auth.users values ('00000000-0000-0000-0000-00000000000a'),('00000000-0000-0000-0000-00000000000b');`);
+const schema = fs.readFileSync(new URL('../supabase/schema.sql', import.meta.url),'utf8');
+await db.exec(schema); await db.exec(schema); // ré-exécutable
+await db.exec(`grant usage on schema public to authenticated; grant all on all tables in schema public to authenticated; grant all on all sequences in schema public to authenticated;`);
+const H='00000000-0000-0000-0000-00000000000a', P='00000000-0000-0000-0000-00000000000b';
+const as = async (u, sql, params) => { await db.exec(`reset role; set role authenticated; select set_config('request.jwt.claim.sub','${u}',false);`); return db.query(sql, params); };
+const expectFail = async (u, sql, label) => { try { const r = await as(u, sql); if (r.affectedRows === 0 && /update|delete/i.test(sql)) { console.log('✓ refusé (0 ligne)', label); return; } console.log('✗ AURAIT DÛ ÉCHOUER', label, r); process.exitCode=1 } catch(e){ console.log('✓ refusé', label) } };
+const ok = async (u, sql, label) => { try { const r = await as(u, sql); console.log('✓', label, r.rows?.length ?? '', r.affectedRows ?? ''); return r } catch(e){ console.log('✗', label, e.message); process.exitCode=1 } };
+await ok(H, `insert into profiles(id,pseudo) values ('${H}','Hôte')`, 'profil hôte');
+await expectFail(P, `insert into profiles(id,pseudo) values ('${H}','Pirate')`, 'profil au nom d’un autre');
+await ok(P, `insert into profiles(id,pseudo) values ('${P}','Joueur')`, 'profil joueur');
+await ok(H, `insert into rooms(code,state) values ('ABCD','{}')`, 'hôte crée salon');
+await expectFail(P, `insert into rooms(code,host_id,state) values ('WXYZ','${H}','{}')`, 'salon au nom d’un autre');
+await expectFail(P, `update rooms set state='{"hack":1}' where code='ABCD'`, 'joueur modifie le salon');
+let r = await as(P, `select state from rooms where code='ABCD'`); console.log(r.rows[0].state.hack ? '✗ modifié' : '✓ salon intact, lisible par joueur');
+await ok(H, `insert into room_private(code,data) values ('ABCD','{"secret":1}')`, 'hôte état privé');
+r = await as(P, `select * from room_private`); console.log(r.rows.length ? '✗ joueur lit l’état privé' : '✓ état privé invisible au joueur');
+await expectFail(P, `insert into room_private(code,data) values ('ABCD','{}') on conflict (code) do update set data='{}'`, 'joueur écrit l’état privé');
+await ok(P, `insert into actions(room_code,payload) values ('ABCD','{"type":"answer","answer":1}')`, 'joueur envoie action');
+await expectFail(P, `insert into actions(room_code,user_id,payload) values ('ABCD','${H}','{}')`, 'action au nom d’un autre');
+await expectFail(P, `insert into actions(room_code,payload) values ('ZZZZ','{}')`, 'action salon inexistant');
+r = await as(P, `select * from actions`); console.log(r.rows.length ? '✗ joueur lit les actions' : '✓ actions (réponses) invisibles au joueur');
+r = await as(H, `select * from actions`); console.log(r.rows.length===1 ? '✓ hôte lit les actions' : '✗ hôte ne lit pas');
+await expectFail(P, `insert into actions(room_code,payload) values ('ABCD','{"x":"${'a'.repeat(3000)}"}')`, 'action trop grosse');
+await ok(P, `insert into clubs(code,name) values ('CLUB22','Les Jeudis')`, 'créer club');
+await expectFail(H, `insert into club_results(club_code,room_code,ranking) values ('CLUB22','ABCD','[]')`, 'résultat par non-membre');
+await ok(H, `insert into club_members(club_code) values ('CLUB22')`, 'hôte rejoint club');
+await ok(H, `insert into club_results(club_code,room_code,ranking,played_at) values ('CLUB22','ABCD','[]','2026-10-20T20:00:00Z')`, 'hôte enregistre résultat');
+await expectFail(H, `insert into club_results(club_code,room_code,ranking,played_at) values ('CLUB22','ABCD','[]','2026-10-20T20:00:00Z')`, 'doublon résultat');
+r = await as(P, `select c.name from club_members m join clubs c on c.code=m.club_code where m.user_id='${H}'`); console.log('✓ jointure clubs', r.rows);
+r = await db.query(`reset role; select tablename from pg_publication_tables where pubname='supabase_realtime'`).catch(e=>({rows:[e.message]})); 
+console.log('publication', (await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime'`)).rows.map(x=>x.tablename));

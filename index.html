@@ -1,0 +1,515 @@
+<title>HOLD UP!</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Manrope:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: une seule colonne façon tapis de jeu — bandeau d'état collant, table des équipes, puis panneau d'action en bas. */
+:root{
+  --felt:#0e3b2c; --felt-deep:#082419; --felt-line:#1d5a44;
+  --ink:#f2eedf; --ink-dim:#a9bdb2;
+  --gold:#f4b938; --gold-ink:#2a1d00;
+  --red:#e2553f; --ok:#5fd18a; --bad:#ff8a78;
+  --display:"Bungee","Arial Black",Impact,sans-serif;
+  --body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--felt-deep)}
+body{margin:0;background:radial-gradient(120% 80% at 50% 0%,var(--felt) 0%,var(--felt-deep) 75%) fixed,var(--felt-deep);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;min-height:100%}
+main{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 80px;display:grid;gap:14px}
+h1,h2,.display{font-family:var(--display);font-weight:400;letter-spacing:.5px;text-wrap:balance;margin:0}
+h1{font-size:2.3rem;line-height:1}
+h1 small{display:block;font-family:var(--body);font-size:.8rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin-top:6px}
+h2{font-size:1.25rem;line-height:1.15}
+p{margin:0}
+.dim{color:var(--ink-dim)}
+.small{font-size:.85rem}
+.label{font-size:.72rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+.panel{background:rgba(0,0,0,.22);border:1px solid var(--felt-line);border-radius:14px;padding:16px;display:grid;gap:12px}
+.panel.hot{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.status{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--felt-deep);border:1px solid var(--felt-line);border-radius:12px;padding:8px 10px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--felt-deep)}
+.status .pot{margin-left:auto;font-family:var(--display);color:var(--gold);font-size:1.1rem;font-variant-numeric:tabular-nums}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid var(--felt-line);color:var(--ink-dim);white-space:nowrap}
+.tag.gold{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+.tag.red{border-color:var(--red);color:var(--bad)}
+.chip{display:inline-block;width:.8em;height:.8em;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px var(--felt-deep),0 0 0 3px var(--gold);vertical-align:-.05em;margin-right:.35em}
+.seats{display:grid;gap:6px}
+.seat{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid transparent}
+.seat.turn{border-color:var(--gold);background:rgba(244,185,56,.10)}
+.seat.out{opacity:.45}
+.seat .nm{font-weight:800;min-width:0;overflow-wrap:anywhere}
+.seat .st{font-variant-numeric:tabular-nums;font-weight:800;text-align:right}
+.seat .meta{display:flex;gap:4px;flex-wrap:wrap;grid-column:1/-1}
+.seat .bet{font-size:.8rem;color:var(--gold);font-weight:700}
+.big{font-size:1.45rem;font-weight:800;line-height:1.25;text-wrap:balance}
+.stack{display:grid;gap:8px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1 1 0;min-width:0}
+button{font:inherit;font-weight:800;cursor:pointer;border-radius:12px;min-height:50px;padding:10px 14px;border:2px solid var(--gold);background:var(--gold);color:var(--gold-ink);touch-action:manipulation}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--felt-line)}
+button.warn{background:transparent;color:var(--bad);border-color:var(--red)}
+button.choice{background:rgba(255,255,255,.05);color:var(--ink);border-color:var(--felt-line);text-align:left}
+button.choice[aria-pressed="true"]{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+button.mini{min-height:40px;padding:6px 10px;font-size:.85rem}
+input,select{font:inherit;width:100%;padding:12px;border-radius:10px;border:1px solid var(--felt-line);background:rgba(0,0,0,.3);color:var(--ink)}
+label{display:grid;gap:6px;font-weight:700}
+.stepper{display:grid;grid-template-columns:52px 1fr 52px;gap:8px;align-items:center}
+.stepper output{text-align:center;font-family:var(--display);font-size:1.6rem;color:var(--gold);font-variant-numeric:tabular-nums}
+.err{color:var(--bad);font-weight:700;font-size:.9rem;min-height:1.2em}
+.notice{border-left:3px solid var(--gold);padding:8px 12px;background:rgba(244,185,56,.08);border-radius:0 8px 8px 0}
+.ok{color:var(--ok)} .ko{color:var(--bad)}
+details summary{cursor:pointer;font-weight:800}
+details ul{margin:8px 0 0;padding-left:20px;display:grid;gap:4px}
+.potline{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:8px 0;border-top:1px solid var(--felt-line)}
+.potline:first-child{border-top:0}
+.rank{display:grid;grid-template-columns:2.2em 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--felt-line);font-weight:800}
+.rank .n{font-family:var(--display);color:var(--gold);font-size:1.3rem}
+.secret{text-align:center;padding:28px 16px}
+.secret .display{font-size:1.9rem;color:var(--gold);overflow-wrap:anywhere}
+@media (prefers-reduced-motion:no-preference){.panel.enter{animation:rise .22s ease-out}@keyframes rise{from{transform:translateY(6px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+<main id="app"></main>
+<script>
+/*ENGINE-START*/
+// Moteur de règles pur (sans DOM). Toutes les fonctions modifient l'objet partie `g`, sérialisable en JSON.
+const HoldUp = (() => {
+  const BANK = [
+    {category:'Géographie',tease:'Une histoire de frontières et de territoires lointains.',q:'Quel pays possède le plus de fuseaux horaires, territoires d’outre-mer compris ?',options:['Russie','France','États-Unis','Chine'],answer:1,bonus:'Combien de fuseaux horaires ce pays couvre-t-il, outre-mer compris (hors Antarctique) ?',bonusOptions:['9','11','12','15'],bonusAnswer:2},
+    {category:'Sciences',tease:'Un animal bien plus étonnant qu’il n’en a l’air.',q:'Quel animal possède trois cœurs ?',options:['Le dauphin','La pieuvre','Le requin','La tortue'],answer:1,bonus:'De quelle couleur est le sang d’une pieuvre ?',bonusOptions:['Rouge','Vert','Bleu','Jaune'],bonusAnswer:2},
+    {category:'Cinéma',tease:'Un film qui a marqué l’histoire des récompenses.',q:'Lequel de ces films a remporté 11 Oscars ?',options:['Titanic','Avatar','Inception','Gladiator'],answer:0,bonus:'En quelle année Titanic est-il sorti aux États-Unis ?',bonusOptions:['1994','1997','2000','2002'],bonusAnswer:1},
+    {category:'Histoire',tease:'Une célèbre bataille et une date qu’on croit connaître.',q:'En quelle année a eu lieu la bataille de Waterloo ?',options:['1789','1804','1815','1848'],answer:2,bonus:'Dans quel pays actuel se trouve Waterloo ?',bonusOptions:['France','Belgique','Pays-Bas','Allemagne'],bonusAnswer:1},
+    {category:'Sport',tease:'Des chiffres que tout le monde croit connaître sur le ballon rond.',q:'Combien de joueurs une équipe de football aligne-t-elle au coup d’envoi ?',options:['9','10','11','12'],answer:2,bonus:'Combien de minutes dure le temps réglementaire d’un match senior ?',bonusOptions:['80','90','100','120'],bonusAnswer:1},
+    {category:'Culture pop',tease:'Un groupe mythique et une ville devenue célèbre.',q:'De quelle ville viennent les Beatles ?',options:['Londres','Manchester','Liverpool','Birmingham'],answer:2,bonus:'Lequel des Beatles était le batteur ?',bonusOptions:['John Lennon','Paul McCartney','George Harrison','Ringo Starr'],bonusAnswer:3},
+    {category:'Nature',tease:'Un géant des mers et un record de taille.',q:'Quel est le plus grand animal vivant ?',options:['Éléphant d’Afrique','Baleine bleue','Requin-baleine','Girafe'],answer:1,bonus:'La baleine bleue est-elle un mammifère ?',bonusOptions:['Oui','Non','Seulement à la naissance','On ne sait pas'],bonusAnswer:0},
+    {category:'Art',tease:'Un tableau célébrissime et son musée.',q:'Dans quel musée peut-on voir La Joconde ?',options:['Prado','Louvre','Orsay','Metropolitan Museum'],answer:1,bonus:'Qui a peint La Joconde ?',bonusOptions:['Michel-Ange','Raphaël','Léonard de Vinci','Botticelli'],bonusAnswer:2},
+    {category:'Sciences',tease:'Un métal précieux et son petit nom au tableau périodique.',q:'Quel est le symbole chimique de l’or ?',options:['Or','Au','Ag','Go'],answer:1,bonus:'Quel est le numéro atomique de l’or ?',bonusOptions:['47','26','79','82'],bonusAnswer:2},
+    {category:'Géographie',tease:'Une capitale que beaucoup confondent avec sa grande voisine.',q:'Quelle est la capitale de l’Australie ?',options:['Sydney','Melbourne','Canberra','Perth'],answer:2,bonus:'Quelle est la ville la plus peuplée d’Australie ?',bonusOptions:['Sydney','Melbourne','Brisbane','Canberra'],bonusAnswer:0},
+    {category:'Musique',tease:'Un instrument noir et blanc, et un compte de touches.',q:'Combien de touches compte un piano standard ?',options:['76','85','88','96'],answer:2,bonus:'Combien de ces touches sont noires ?',bonusOptions:['32','36','40','52'],bonusAnswer:1},
+    {category:'Histoire',tease:'Un petit pas, un grand bond.',q:'Qui a été le premier homme à marcher sur la Lune ?',options:['Buzz Aldrin','Youri Gagarine','Neil Armstrong','Michael Collins'],answer:2,bonus:'En quelle année ?',bonusOptions:['1965','1969','1972','1975'],bonusAnswer:1},
+    {category:'Littérature',tease:'Un roman fleuve et un forçat au grand cœur.',q:'Qui a écrit Les Misérables ?',options:['Émile Zola','Victor Hugo','Honoré de Balzac','Alexandre Dumas'],answer:1,bonus:'Comment s’appelle la petite fille recueillie par Jean Valjean ?',bonusOptions:['Éponine','Fantine','Cosette','Azelma'],bonusAnswer:2},
+    {category:'Espace',tease:'Une planète qui a très chaud.',q:'Quelle planète est la plus proche du Soleil ?',options:['Vénus','Mercure','Mars','Terre'],answer:1,bonus:'Quelle est la plus grande planète du système solaire ?',bonusOptions:['Saturne','Neptune','Jupiter','Uranus'],bonusAnswer:2},
+    {category:'Géographie',tease:'Un long ruban d’eau qui traverse la France.',q:'Quel est le plus long fleuve de France ?',options:['La Seine','Le Rhône','La Garonne','La Loire'],answer:3,bonus:'Où se jette-t-il ?',bonusOptions:['La Manche','L’océan Atlantique','La Méditerranée','La mer du Nord'],bonusAnswer:1},
+    {category:'Sport',tease:'Des anneaux et une flamme.',q:'Combien d’anneaux figurent sur le drapeau olympique ?',options:['4','5','6','7'],answer:1,bonus:'Quelle ville a accueilli les Jeux olympiques d’été 2024 ?',bonusOptions:['Tokyo','Los Angeles','Paris','Londres'],bonusAnswer:2},
+    {category:'Cuisine',tease:'Un plat de riz qui sent bon le safran.',q:'De quel pays vient la paella ?',options:['Italie','Portugal','Mexique','Espagne'],answer:3,bonus:'De quelle région en est-elle originaire ?',bonusOptions:['Andalousie','Valence','Catalogne','Galice'],bonusAnswer:1},
+    {category:'Tech',tease:'Trois lettres que vous tapez sans y penser.',q:'Que signifie « www » ?',options:['World Wide Web','Wide World Wireless','Web World Wide','World Web Window'],answer:0,bonus:'Qui a inventé le Web ?',bonusOptions:['Bill Gates','Tim Berners-Lee','Steve Jobs','Alan Turing'],bonusAnswer:1},
+    {category:'Art',tease:'Un ciel tourbillonnant au-dessus d’un village.',q:'Qui a peint La Nuit étoilée ?',options:['Claude Monet','Vincent van Gogh','Paul Cézanne','Edvard Munch'],answer:1,bonus:'De quelle nationalité était ce peintre ?',bonusOptions:['Français','Belge','Néerlandais','Allemand'],bonusAnswer:2},
+    {category:'Nature',tease:'Un petit animal qui en fait frissonner plus d’un.',q:'Combien de pattes a une araignée ?',options:['6','8','10','12'],answer:1,bonus:'Et combien de pattes a un insecte ?',bonusOptions:['4','6','8','10'],bonusAnswer:1}
+  ];
+  const GREED_COST = 3;
+
+  function shuffle(a, rng){ a = a.slice(); for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function err(msg){ const e = new Error(msg); e.rule = true; return e; }
+
+  function createGame(o){
+    const names = (o.names || []).map(s => String(s).trim()).filter(Boolean);
+    if (names.length < 2 || names.length > 6) throw err('Il faut entre 2 et 6 équipes.');
+    if (new Set(names.map(n => n.toLowerCase())).size !== names.length) throw err('Deux équipes portent le même nom.');
+    const rng = o.rng || Math.random;
+    const start = o.startChips ?? 30;
+    return {
+      v: 2, phase: 'setup',
+      teams: names.map(name => ({ name, chips: start, out: false, folded: false, allIn: false, committed: 0, street: 0, acted: false, ver: -1, answer: null, greedy: false, bonusAnswer: null, greedPaid: 0 })),
+      startChips: start, rounds: o.rounds ?? 8, round: 0, greedMode: o.greed !== false,
+      sb: o.sb ?? 1, bb: o.bb ?? 2, dealer: -1, sbSeat: -1, bbSeat: -1,
+      deck: shuffle(o.questions || BANK, rng), question: null,
+      dead: 0, jackpot: 0, street: null, currentBet: 0, minRaise: 0, raiseVer: 0, toAct: -1,
+      answerQueue: [], answerIdx: 0, result: null, final: null, log: []
+    };
+  }
+
+  const inHand = t => !t.out;
+  function seatsAfter(g, from){ const n = g.teams.length, r = []; for (let k = 1; k <= n; k++) r.push((from + k + n) % n); return r; }
+  function nextSeat(g, from, pred){ for (const i of seatsAfter(g, from)) if (pred(g.teams[i], i)) return i; return -1; }
+  function totalPot(g){ return g.teams.reduce((s, t) => s + t.committed, 0) + g.dead; }
+  function bank(g){ return g.teams.reduce((s, t) => s + t.chips, 0) + totalPot(g) + g.jackpot; }
+
+  function pay(t, v){ v = Math.max(0, Math.min(v, t.chips)); t.chips -= v; t.street += v; t.committed += v; if (t.chips === 0) t.allIn = true; return v; }
+
+  function resetStreet(g, name){
+    g.street = name; g.currentBet = 0; g.minRaise = g.bb; g.raiseVer = 0;
+    g.teams.forEach(t => { t.street = 0; t.acted = false; t.ver = -1; });
+  }
+
+  function startRound(g){
+    g.teams.forEach(t => { if (!t.out && t.chips <= 0) t.out = true; });
+    const alive = g.teams.filter(inHand);
+    if (g.round >= g.rounds || alive.length < 2){ finishGame(g); return; }
+    g.round++;
+    g.teams.forEach(t => Object.assign(t, { folded: t.out, allIn: false, committed: 0, street: 0, acted: false, ver: -1, answer: null, answered: false, greedy: false, bonusAnswer: null, greedPaid: 0 }));
+    g.dealer = nextSeat(g, g.dealer < 0 ? g.teams.length - 1 : g.dealer, inHand);
+    if (alive.length === 2){ g.sbSeat = g.dealer; g.bbSeat = nextSeat(g, g.dealer, inHand); }
+    else { g.sbSeat = nextSeat(g, g.dealer, inHand); g.bbSeat = nextSeat(g, g.sbSeat, inHand); }
+    g.dead = g.jackpot; g.jackpot = 0;
+    g.question = g.deck[(g.round - 1) % g.deck.length];
+    g.result = null; g.answerQueue = []; g.answerIdx = 0;
+    resetStreet(g, 'pre');
+    pay(g.teams[g.sbSeat], g.sb);
+    pay(g.teams[g.bbSeat], g.bb);
+    g.currentBet = g.bb; g.minRaise = g.bb;
+    g.phase = 'tease';
+    g.log.push(`Manche ${g.round} : blindes ${g.teams[g.sbSeat].name} (${g.sb}) et ${g.teams[g.bbSeat].name} (${g.bb}).`);
+  }
+
+  function needsAct(g, t){ return !t.folded && !t.allIn && (!t.acted || t.street < g.currentBet); }
+  function streetDone(g){
+    const free = g.teams.filter(t => !t.folded && !t.allIn);
+    if (free.length === 0) return true;
+    if (free.length === 1 && free[0].street >= g.currentBet) return true;
+    return !g.teams.some(t => needsAct(g, t));
+  }
+
+  // Ouvre un tour d'enchères : 'pre' juste après l'annonce, 'post' après les réponses secrètes.
+  function openStreet(g){
+    g.phase = 'bet';
+    if (streetDone(g)){ closeStreet(g); return; }
+    const after = g.street === 'pre' ? g.bbSeat : g.dealer;
+    g.toAct = nextSeat(g, after, t => needsAct(g, t));
+  }
+
+  function legal(g){
+    const t = g.teams[g.toAct];
+    const owe = Math.max(0, g.currentBet - t.street);
+    const maxTo = t.street + t.chips;
+    const canRaise = t.chips > owe && (!t.acted || t.ver < g.raiseVer);
+    return { owe, callAmt: Math.min(owe, t.chips), canCheck: owe === 0, canRaise,
+      minTo: Math.min(maxTo, g.currentBet + g.minRaise), maxTo, isBet: g.currentBet === 0, callIsAllIn: owe >= t.chips && owe > 0 };
+  }
+
+  function act(g, type, to){
+    if (g.phase !== 'bet') throw err('Ce n’est pas le moment de miser.');
+    const i = g.toAct, t = g.teams[i], L = legal(g);
+    if (type === 'allin'){
+      if (L.callIsAllIn || !L.canRaise) { if (t.chips <= L.owe) type = 'call'; else throw err('Relance impossible : tu peux seulement suivre ou te coucher.'); }
+      else { type = 'raise'; to = L.maxTo; }
+    }
+    if (type === 'fold'){ t.folded = true; g.log.push(`${t.name} se couche.`); }
+    else if (type === 'check'){ if (!L.canCheck) throw err(`Il faut au moins suivre ${L.owe}.`); g.log.push(`${t.name} check.`); }
+    else if (type === 'call'){ if (L.canCheck) { g.log.push(`${t.name} check.`); } else { pay(t, L.callAmt); g.log.push(`${t.name} suit${t.allIn ? ' (tapis)' : ''}.`); } }
+    else if (type === 'raise'){
+      to = Math.floor(Number(to));
+      if (!L.canRaise) throw err('Relance impossible : tu peux seulement suivre ou te coucher.');
+      if (!(to > g.currentBet)) throw err('La relance doit dépasser la mise en cours.');
+      if (to > L.maxTo) throw err('Pas assez de jetons.');
+      if (to < L.minTo) throw err(`Relance minimum : ${L.minTo}.`);
+      const inc = to - g.currentBet;
+      pay(t, to - t.street);
+      if (inc >= g.minRaise){ g.minRaise = inc; g.raiseVer++; }
+      g.currentBet = to;
+      g.log.push(`${t.name} ${L.isBet ? 'mise' : 'relance à'} ${to}${t.allIn ? ' (tapis)' : ''}.`);
+    }
+    else throw err('Action inconnue.');
+    t.acted = true; t.ver = g.raiseVer;
+    const left = g.teams.filter(x => !x.folded);
+    if (left.length === 1){ awardUncontested(g, left[0]); return; }
+    if (streetDone(g)){ closeStreet(g); return; }
+    g.toAct = nextSeat(g, i, x => needsAct(g, x));
+  }
+
+  function closeStreet(g){
+    g.toAct = -1;
+    if (g.street === 'pre'){
+      g.answerQueue = seatsAfter(g, g.dealer).filter(i => !g.teams[i].folded);
+      g.answerIdx = 0; g.phase = 'answers';
+    } else showdown(g);
+  }
+
+  function canGreed(g, i){ const t = g.teams[i]; return g.greedMode && !t.folded && t.chips >= GREED_COST; }
+
+  // Réponse d'une équipe donnée (ordre libre : en ligne, chaque équipe répond sur son téléphone).
+  function answerFor(g, i, a){
+    if (g.phase !== 'answers') throw err('Ce n’est pas le moment de répondre.');
+    const t = g.teams[i], q = g.question;
+    if (!t || !g.answerQueue.includes(i) || t.folded) throw err('Cette équipe ne joue pas cette manche.');
+    if (t.answered) throw err('Réponse déjà verrouillée.');
+    if (!(Number.isInteger(a.answer) && a.answer >= 0 && a.answer < q.options.length)) throw err('Choisis une réponse.');
+    if (a.greedy){
+      if (!canGreed(g, i)) throw err(`La gourmandise coûte ${GREED_COST} jetons.`);
+      if (!(Number.isInteger(a.bonusAnswer) && a.bonusAnswer >= 0 && a.bonusAnswer < q.bonusOptions.length)) throw err('Choisis une réponse à la question liée.');
+    }
+    t.answer = a.answer; t.answered = true;
+    if (a.greedy){
+      t.chips -= GREED_COST; t.greedPaid = GREED_COST; g.dead += GREED_COST; t.greedy = true; t.bonusAnswer = a.bonusAnswer;
+      if (t.chips === 0) t.allIn = true;
+    }
+    afterAnswer(g);
+  }
+  function pendingAnswers(g){ return g.answerQueue.filter(i => !g.teams[i].folded && !g.teams[i].answered); }
+  function afterAnswer(g){
+    g.answerIdx = g.answerQueue.filter(i => g.teams[i].answered || g.teams[i].folded).length;
+    const left = g.teams.filter(x => !x.folded);
+    if (left.length === 1){ awardUncontested(g, left[0]); return; }
+    if (!pendingAnswers(g).length){ resetStreet(g, 'post'); openStreet(g); }
+  }
+  // Version « un seul téléphone » : la prochaine équipe dans l'ordre.
+  function submitAnswer(g, a){
+    if (g.phase !== 'answers') throw err('Ce n’est pas le moment de répondre.');
+    answerFor(g, pendingAnswers(g)[0], a);
+  }
+
+  // L'hôte couche d'office une équipe absente (à son tour d'enchère, ou tant qu'elle n'a pas répondu).
+  function abandon(g, i){
+    const t = g.teams[i];
+    if (g.phase === 'bet'){ if (g.toAct !== i) throw err('Ce n’est pas le tour de cette équipe.'); act(g, 'fold'); return; }
+    if (g.phase === 'answers'){
+      if (t.folded || t.answered || !g.answerQueue.includes(i)) throw err('Cette équipe a déjà répondu.');
+      t.folded = true; g.log.push(`${t.name} abandonne la manche.`); afterAnswer(g); return;
+    }
+    throw err('Rien à abandonner maintenant.');
+  }
+
+  // Ce que tout le monde peut voir : pas de réponses (ni bonnes, ni données) avant l'abattage, pas de paquet de questions.
+  function publicView(g){
+    const v = JSON.parse(JSON.stringify(g));
+    delete v.deck; v.log = v.log.slice(-8);
+    const reveal = g.phase === 'end' || (g.phase === 'result' && g.result && g.result.type === 'showdown');
+    if (v.question){
+      const q = v.question;
+      if (g.phase === 'tease' || (g.phase === 'bet' && g.street === 'pre') || (g.phase === 'result' && g.result && g.result.type === 'hidden' && g.result.street === 'pre'))
+        v.question = { category: q.category, tease: q.tease };
+      else if (!reveal){ delete q.answer; delete q.bonusAnswer; }
+    }
+    if (!reveal) v.teams.forEach(t => { t.answer = null; t.bonusAnswer = null; t.greedy = false; t.greedPaid = 0; });
+    return v;
+  }
+
+  function isCorrect(g, t){ const q = g.question; return t.answer === q.answer && (!t.greedy || t.bonusAnswer === q.bonusAnswer); }
+
+  function distribute(g, winners, amount){
+    if (!winners.length || amount <= 0) return [];
+    const order = seatsAfter(g, g.dealer).filter(i => winners.includes(i));
+    const share = Math.floor(amount / order.length), rem = amount % order.length;
+    return order.map((i, k) => { const v = share + (k < rem ? 1 : 0); g.teams[i].chips += v; return { seat: i, amount: v }; });
+  }
+
+  function awardUncontested(g, w){
+    const total = totalPot(g), seat = g.teams.indexOf(w);
+    w.chips += total;
+    g.teams.forEach(t => { t.committed = 0; }); g.dead = 0;
+    g.result = { type: 'hidden', street: g.street, winner: seat, total, pots: [] };
+    g.phase = 'result'; g.toAct = -1;
+    g.log.push(`${w.name} remporte ${total} sans montrer sa réponse.`);
+  }
+
+  // Pots principaux et annexes à partir des contributions totales de la manche.
+  function buildPots(g){
+    const contenders = g.teams.map((t, i) => i).filter(i => !g.teams[i].folded);
+    const levels = [...new Set(contenders.map(i => g.teams[i].committed))].filter(v => v > 0).sort((a, b) => a - b);
+    const pots = []; let prev = 0;
+    levels.forEach((L, k) => {
+      let amount = 0; const from = new Set();
+      g.teams.forEach((t, i) => { const c = Math.min(t.committed, L) - Math.min(t.committed, prev); if (c > 0){ amount += c; from.add(i); } });
+      if (k === levels.length - 1) g.teams.forEach((t, i) => { const extra = t.committed - L; if (extra > 0){ amount += extra; from.add(i); } });
+      pots.push({ amount, eligible: contenders.filter(i => g.teams[i].committed >= L), from: [...from], dead: 0 });
+      prev = L;
+    });
+    if (g.dead > 0){
+      if (!pots.length) pots.push({ amount: 0, eligible: contenders, from: [], dead: 0 });
+      pots[0].amount += g.dead; pots[0].dead = g.dead;
+    }
+    return pots;
+  }
+
+  function showdown(g){
+    const pots = buildPots(g);
+    const out = pots.map((p, k) => {
+      const solo = p.eligible.length === 1 && p.dead === 0 && p.from.every(i => i === p.eligible[0]);
+      if (solo) return { k, amount: p.amount, eligible: p.eligible, kind: 'refund', paid: distribute(g, p.eligible, p.amount) };
+      const right = p.eligible.filter(i => isCorrect(g, g.teams[i]));
+      const greedyRight = right.filter(i => g.teams[i].greedy);
+      const winners = greedyRight.length ? greedyRight : right;
+      if (!winners.length){ g.jackpot += p.amount; return { k, amount: p.amount, eligible: p.eligible, kind: 'rollover', paid: [] }; }
+      return { k, amount: p.amount, eligible: p.eligible, kind: greedyRight.length ? 'greed' : 'win', paid: distribute(g, winners, p.amount) };
+    });
+    g.teams.forEach(t => { t.committed = 0; }); g.dead = 0;
+    g.result = { type: 'showdown', pots: out };
+    g.phase = 'result'; g.toAct = -1;
+  }
+
+  function finishGame(g){
+    let shared = [];
+    if (g.jackpot > 0){
+      const withChips = g.teams.map((t, i) => i).filter(i => g.teams[i].chips > 0);
+      const to = withChips.length ? withChips : g.teams.map((t, i) => i);
+      const amt = g.jackpot; g.jackpot = 0;
+      shared = distribute(g, to, amt);
+    }
+    g.final = { jackpotShared: shared };
+    g.phase = 'end'; g.toAct = -1;
+  }
+
+  return { BANK, GREED_COST, createGame, startRound, openStreet, legal, act, submitAnswer, answerFor, pendingAnswers, abandon, publicView, canGreed, isCorrect, totalPot, bank, buildPots };
+})();
+if (typeof module !== 'undefined') module.exports = HoldUp;
+if (typeof window !== 'undefined') window.HoldUp = HoldUp;
+/*ENGINE-END*/
+
+// ---------- Interface ----------
+(() => {
+  const app = document.getElementById('app');
+  const SAVE = 'holdup-game-v2';
+  let g = null, history = [], ui = {}, error = '';
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const chips = n => `<span class="chip" aria-hidden="true"></span>${n}`;
+  const save = () => { try { localStorage.setItem(SAVE, JSON.stringify({ g, history: history.slice(-30) })); } catch (e) {} };
+  const loadSaved = () => { try { const s = JSON.parse(localStorage.getItem(SAVE) || 'null'); return s && s.g && s.g.v === 2 && s.g.phase !== 'end' ? s : null; } catch (e) { return null; } };
+  const clearSaved = () => { try { localStorage.removeItem(SAVE); } catch (e) {} };
+  const snapshot = () => { history.push(JSON.stringify(g)); if (history.length > 60) history.shift(); };
+
+  function run(fn){ error = ''; try { fn(); } catch (e) { if (e.rule) error = e.message; else throw e; } save(); render(); }
+
+  function header(){
+    return `<header><h1>HOLD UP!<small>Culture G, jetons fictifs et bluff</small></h1></header>`;
+  }
+  function status(extra = ''){
+    return `<div class="status"><span class="tag gold">Manche ${g.round}/${g.rounds}</span>${extra}<span class="pot">${chips(HoldUp.totalPot(g))}</span></div>`;
+  }
+  function seats(){
+    return `<div class="seats">${g.teams.map((t, i) => {
+      const tags = [];
+      if (i === g.dealer) tags.push('<span class="tag">Donneur</span>');
+      if (i === g.sbSeat) tags.push(`<span class="tag">P. blinde</span>`);
+      if (i === g.bbSeat) tags.push(`<span class="tag">G. blinde</span>`);
+      if (t.out) tags.push('<span class="tag red">Éliminée</span>');
+      else if (t.folded) tags.push('<span class="tag red">Couchée</span>');
+      else if (t.allIn) tags.push('<span class="tag gold">Tapis</span>');
+      const bet = !t.out && t.street > 0 && (g.phase === 'bet' || g.phase === 'answers') ? `<span class="bet">mise ${t.street}</span>` : '';
+      return `<div class="seat ${i === g.toAct ? 'turn' : ''} ${t.out || t.folded ? 'out' : ''}"><span class="nm">${esc(t.name)}</span><span class="st">${chips(t.chips)}</span><div class="meta">${bet}${tags.join('')}</div></div>`;
+    }).join('')}</div>`;
+  }
+  const errBox = () => `<p class="err" role="alert">${esc(error)}</p>`;
+  const undoBtn = () => history.length ? `<button class="ghost mini" data-a="undo">Annuler la dernière action</button>` : '';
+
+  function render(){
+    if (!g || g.phase === 'setup') return setupScreen();
+    const screens = { tease: teaseScreen, bet: betScreen, answers: answersScreen, result: resultScreen, end: endScreen };
+    app.innerHTML = screens[g.phase]();
+    const f = app.querySelector('[data-focus]'); if (f) f.focus({ preventScroll: true });
+  }
+
+  function setupScreen(){
+    const saved = loadSaved();
+    app.innerHTML = header() + (saved ? `<section class="panel hot"><h2>Partie en cours</h2><p class="dim">Manche ${saved.g.round}/${saved.g.rounds} · ${saved.g.teams.map(t => esc(t.name)).join(', ')}</p><div class="row"><button data-a="resume">Reprendre</button><button class="ghost" data-a="discard">Effacer</button></div></section>` : '') + `
+    <section class="panel">
+      <h2>Créer la table</h2>
+      <label>Équipes (2 à 6, séparées par des virgules)<input id="names" value="${esc(ui.names || 'Les Renards, Les Pirates, Les Insolents')}" autocomplete="off"></label>
+      <div class="row">
+        <label>Manches<select id="rounds">${[6, 8, 10, 12].map(n => `<option ${n === (ui.rounds || 8) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label>Jetons de départ<select id="start">${[20, 30, 50].map(n => `<option ${n === (ui.start || 30) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      </div>
+      <label>Gourmandise<select id="greed"><option value="yes">Activée (+${HoldUp.GREED_COST} jetons, question liée)</option><option value="no">Désactivée</option></select></label>
+      ${errBox()}
+      <button data-a="create">Créer la table</button>
+      <p class="dim small">Blindes 1 / 2 tournantes. Un seul téléphone circule autour de la table. Jetons fictifs uniquement : aucun argent réel.</p>
+    </section>
+    <section class="panel"><details><summary>Les règles en 30 secondes</summary><ul class="small">
+      <li>L’annonce donne le thème. Premier tour d’enchères : se coucher, suivre, relancer ou tapis.</li>
+      <li>Chaque équipe restante répond en secret. Option gourmandise : ${HoldUp.GREED_COST} jetons pour une question liée.</li>
+      <li>Second tour d’enchères, la question est connue de tous mais pas les réponses.</li>
+      <li>Si tout le monde se couche, la dernière équipe gagne sans montrer sa réponse.</li>
+      <li>Sinon on révèle : le pot va aux bonnes réponses. La gourmandise réussie passe devant, la gourmandise ratée élimine du pot.</li>
+      <li>Une équipe à tapis ne peut gagner que ce qu’elle a couvert (pots annexes).</li>
+      <li>Personne n’a trouvé ? Le pot devient jackpot pour la manche suivante.</li>
+    </ul></details></section>`;
+  }
+
+  function teaseScreen(){
+    const q = g.question;
+    return header() + status() + `<section class="panel enter"><span class="label">L’annonce · ${esc(q.category)}</span><p class="big">${esc(q.tease)}</p>
+      <p class="dim small">${esc(g.teams[g.sbSeat].name)} pose la petite blinde (${g.sb}), ${esc(g.teams[g.bbSeat].name)} la grosse (${g.bb}).${g.dead ? ` Jackpot en jeu : ${g.dead} jetons.` : ''}</p>
+      <button data-a="open" data-focus>Ouvrir les enchères</button></section>` + seats();
+  }
+
+  function betScreen(){
+    const t = g.teams[g.toAct], L = HoldUp.legal(g), q = g.question;
+    if (ui.raiseFor !== `${g.round}-${g.street}-${g.toAct}-${g.currentBet}`){ ui.raiseFor = `${g.round}-${g.street}-${g.toAct}-${g.currentBet}`; ui.raiseTo = L.minTo; }
+    ui.raiseTo = Math.max(L.minTo, Math.min(L.maxTo, ui.raiseTo));
+    const potTo = Math.min(L.maxTo, g.currentBet + HoldUp.totalPot(g) + L.owe);
+    const raisePanel = L.canRaise ? `
+      <div class="stack"><span class="label">${L.isBet ? 'Miser' : 'Relancer'} à</span>
+        <div class="stepper"><button class="ghost" data-a="dec" aria-label="Moins">−</button><output>${ui.raiseTo}</output><button class="ghost" data-a="inc" aria-label="Plus">+</button></div>
+        <div class="row"><button class="ghost mini" data-a="set" data-v="${L.minTo}">Min ${L.minTo}</button>${potTo > L.minTo && potTo < L.maxTo ? `<button class="ghost mini" data-a="set" data-v="${potTo}">Pot ${potTo}</button>` : ''}<button class="ghost mini" data-a="set" data-v="${L.maxTo}">Tapis ${L.maxTo}</button></div>
+        <button data-a="raise">${ui.raiseTo === L.maxTo ? 'Tapis' : (L.isBet ? 'Miser ' : 'Relancer à ') + ui.raiseTo}</button></div>` : '';
+    const callBtn = L.canCheck ? `<button class="ghost" data-a="check" data-focus>Parole</button>` : `<button class="ghost" data-a="call" data-focus>${L.callIsAllIn ? 'Suivre à tapis' : 'Suivre'} ${L.callAmt}</button>`;
+    const context = g.street === 'pre'
+      ? `<span class="label">Avant la question · ${esc(q.category)}</span><p>${esc(q.tease)}</p>`
+      : `<span class="label">Après les réponses secrètes</span><p><b>${esc(q.q)}</b></p>`;
+    return header() + status(`<span class="tag">${g.street === 'pre' ? 'Enchères 1' : 'Enchères 2'}</span>`) + `
+      <section class="panel hot enter">${context}
+        <h2>À ${esc(t.name)} de parler</h2>
+        <p class="dim small">${L.owe ? `Mise à suivre : ${L.owe}` : 'Personne n’a misé sur ce tour'} · reste ${t.chips} jetons</p>
+        <div class="row"><button class="warn" data-a="fold">Se coucher</button>${callBtn}</div>
+        ${raisePanel}${errBox()}${undoBtn()}
+      </section>` + seats();
+  }
+
+  function answersScreen(){
+    const i = g.answerQueue[g.answerIdx], t = g.teams[i], q = g.question;
+    const key = `${g.round}-${i}`;
+    if (ui.ansKey !== key){ ui.ansKey = key; ui.step = 'handoff'; ui.answer = null; ui.bonus = null; }
+    const opts = (list, sel, a) => `<div class="stack">${list.map((x, j) => `<button class="choice" aria-pressed="${sel === j}" data-a="${a}" data-v="${j}">${'ABCD'[j]}. ${esc(x)}</button>`).join('')}</div>`;
+    const top = header() + status(`<span class="tag">Réponses secrètes ${g.answerIdx + 1}/${g.answerQueue.length}</span>`);
+    if (ui.step === 'handoff') return top + `<section class="panel secret enter"><span class="label">Passe le téléphone à</span><p class="display">${esc(t.name)}</p><p class="dim">Les autres regardent ailleurs.</p><button data-a="ready" data-focus>C’est nous, on regarde</button></section>${undoBtn()}`;
+    if (ui.step === 'main') return top + `<section class="panel enter"><span class="label">${esc(t.name)} · réponse secrète</span><p class="big">${esc(q.q)}</p>${opts(q.options, ui.answer, 'pick')}${errBox()}<button data-a="lock" ${ui.answer === null ? 'disabled' : ''}>Verrouiller</button></section>`;
+    if (ui.step === 'greed') return top + `<section class="panel hot enter"><span class="label">Gourmandise</span><h2>On tente le gros coup ?</h2><p>${HoldUp.GREED_COST} jetons pour une question liée. Les deux bonnes réponses vous donnent la priorité sur le pot. Une erreur sur la question liée vous en exclut.</p><p class="dim small">Il vous reste ${t.chips} jetons.</p><div class="row"><button class="ghost" data-a="nogreed" data-focus>Non merci</button><button data-a="greed">Je suis gourmand</button></div></section>`;
+    if (ui.step === 'bonus') return top + `<section class="panel hot enter"><span class="label">${esc(t.name)} · question liée</span><p class="big">${esc(q.bonus)}</p>${opts(q.bonusOptions, ui.bonus, 'pickb')}${errBox()}<button data-a="lockb" ${ui.bonus === null ? 'disabled' : ''}>Verrouiller</button></section>`;
+  }
+
+  function resultScreen(){
+    const r = g.result, q = g.question, last = g.round >= g.rounds || g.teams.filter(t => t.chips > 0).length < 2;
+    let body;
+    if (r.type === 'hidden'){
+      body = `<span class="label">Aucun aveu</span><h2>${esc(g.teams[r.winner].name)} rafle ${r.total} jetons</h2><p class="dim">${r.street === 'pre' ? 'Tout le monde s’est couché avant la question.' : 'Les autres se sont couchés : la réponse reste secrète.'}</p>`;
+    } else {
+      const name = i => esc(g.teams[i].name);
+      const pots = r.pots.map((p, k) => {
+        const title = r.pots.length > 1 ? (k === 0 ? 'Pot principal' : `Pot annexe ${k}`) : 'Pot';
+        const what = p.kind === 'rollover' ? '<span class="ko">Personne : jackpot reporté</span>'
+          : p.kind === 'refund' ? `Rendu à ${name(p.eligible[0])} (mise non suivie)`
+          : p.paid.map(x => `${name(x.seat)} +${x.amount}`).join(', ') + (p.kind === 'greed' ? ' · gourmandise' : '');
+        return `<div class="potline"><span>${title}</span><b>${p.amount}</b><span class="small" style="grid-column:1/-1">${what}</span></div>`;
+      }).join('');
+      const answers = g.teams.filter(t => !t.folded).map(t => `<p class="small">${esc(t.name)} : ${esc(q.options[t.answer])} <span class="${t.answer === q.answer ? 'ok' : 'ko'}">${t.answer === q.answer ? '✓' : '✗'}</span>${t.greedy ? ` · liée : ${esc(q.bonusOptions[t.bonusAnswer])} <span class="${t.bonusAnswer === q.bonusAnswer ? 'ok' : 'ko'}">${t.bonusAnswer === q.bonusAnswer ? '✓' : '✗'}</span>` : ''}</p>`).join('');
+      body = `<span class="label">Abattage</span><p class="big">${esc(q.q)}</p><p>Réponse : <b>${esc(q.options[q.answer])}</b>${g.teams.some(t => !t.folded && t.greedy) ? ` · liée : <b>${esc(q.bonusOptions[q.bonusAnswer])}</b>` : ''}</p>${answers}<div>${pots}</div>${g.jackpot && last ? '<p class="notice small">Dernière manche : le jackpot sera partagé entre les équipes qui ont encore des jetons.</p>' : ''}`;
+    }
+    return header() + status() + `<section class="panel enter">${body}<button data-a="next" data-focus>${last ? 'Classement final' : 'Manche suivante'}</button></section>` + seats();
+  }
+
+  function endScreen(){
+    const ranked = g.teams.map((t, i) => ({ t, i })).sort((a, b) => b.t.chips - a.t.chips);
+    const shared = g.final && g.final.jackpotShared.length ? `<p class="notice small">Jackpot non réclamé partagé : ${g.final.jackpotShared.map(x => `${esc(g.teams[x.seat].name)} +${x.amount}`).join(', ')}.</p>` : '';
+    return header() + `<section class="panel enter"><span class="label">Fin de la soirée</span><h2>${esc(ranked[0].t.name)} gagne la table</h2><div>${ranked.map((x, k) => `<div class="rank"><span class="n">${k + 1}</span><span>${esc(x.t.name)}</span><span>${chips(x.t.chips)}</span></div>`).join('')}</div>${shared}<button data-a="new" data-focus>Nouvelle soirée</button></section>`;
+  }
+
+  app.addEventListener('click', e => {
+    const b = e.target.closest('button[data-a]'); if (!b || b.disabled) return;
+    const a = b.dataset.a, v = Number(b.dataset.v);
+    if (a === 'create'){
+      ui.names = document.getElementById('names').value; ui.rounds = +document.getElementById('rounds').value; ui.start = +document.getElementById('start').value;
+      return run(() => { g = HoldUp.createGame({ names: ui.names.split(','), rounds: ui.rounds, startChips: ui.start, greed: document.getElementById('greed').value === 'yes' }); history = []; HoldUp.startRound(g); });
+    }
+    if (a === 'resume'){ const s = loadSaved(); if (s){ g = s.g; history = s.history || []; } return render(); }
+    if (a === 'discard' || a === 'new'){ clearSaved(); g = null; history = []; error = ''; return render(); }
+    if (a === 'undo'){ if (history.length){ g = JSON.parse(history.pop()); ui = { names: ui.names, rounds: ui.rounds, start: ui.start }; error = ''; save(); } return render(); }
+    if (a === 'open'){ snapshot(); return run(() => HoldUp.openStreet(g)); }
+    if (['fold', 'check', 'call'].includes(a)){ snapshot(); return run(() => HoldUp.act(g, a)); }
+    if (a === 'raise'){ snapshot(); return run(() => HoldUp.act(g, 'raise', ui.raiseTo)); }
+    if (a === 'inc' || a === 'dec'){ ui.raiseTo += a === 'inc' ? 1 : -1; error = ''; return render(); }
+    if (a === 'set'){ ui.raiseTo = v; error = ''; return render(); }
+    if (a === 'ready'){ ui.step = 'main'; return render(); }
+    if (a === 'pick'){ ui.answer = v; return render(); }
+    if (a === 'pickb'){ ui.bonus = v; return render(); }
+    const i = g && g.answerQueue[g.answerIdx];
+    if (a === 'lock'){ if (HoldUp.canGreed(g, i)){ ui.step = 'greed'; return render(); } snapshot(); return run(() => HoldUp.submitAnswer(g, { answer: ui.answer })); }
+    if (a === 'nogreed'){ snapshot(); return run(() => HoldUp.submitAnswer(g, { answer: ui.answer })); }
+    if (a === 'greed'){ ui.step = 'bonus'; return render(); }
+    if (a === 'lockb'){ snapshot(); return run(() => HoldUp.submitAnswer(g, { answer: ui.answer, greedy: true, bonusAnswer: ui.bonus })); }
+    if (a === 'next'){ snapshot(); return run(() => HoldUp.startRound(g)); }
+  });
+
+  render();
+})();
+</script>

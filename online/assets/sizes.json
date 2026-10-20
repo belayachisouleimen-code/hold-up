@@ -1,0 +1,174 @@
+{
+"logo": [
+406,
+335
+],
+"cat-general": [
+122,
+190
+],
+"cat-histoire": [
+121,
+190
+],
+"cat-sciences": [
+122,
+190
+],
+"cat-culture-pop": [
+124,
+190
+],
+"cat-sport": [
+122,
+190
+],
+"cat-arts": [
+122,
+190
+],
+"cat-nature": [
+119,
+190
+],
+"cat-insolite": [
+119,
+190
+],
+"cat-mystere": [
+119,
+190
+],
+"chip-1": [
+107,
+111
+],
+"chip-5": [
+108,
+112
+],
+"chip-10": [
+107,
+111
+],
+"chip-20": [
+107,
+111
+],
+"chip-50": [
+110,
+111
+],
+"chip-100": [
+111,
+116
+],
+"coins": [
+86,
+101
+],
+"coin-crown": [
+78,
+82
+],
+"coin-star": [
+77,
+81
+],
+"coin-spade": [
+78,
+82
+],
+"bulb": [
+71,
+93
+],
+"btn-suivre": [
+178,
+152
+],
+"btn-miser": [
+178,
+152
+],
+"btn-relancer": [
+179,
+152
+],
+"btn-coucher": [
+180,
+153
+],
+"btn-valider": [
+250,
+100
+],
+"btn-passer": [
+250,
+104
+],
+"chip-x2": [
+112,
+100
+],
+"chip-x5": [
+112,
+100
+],
+"chip-x10": [
+113,
+100
+],
+"btn-allin": [
+122,
+100
+],
+"bar-sablier": [
+213,
+67
+],
+"bar-chrono": [
+240,
+53
+],
+"ico-info": [
+72,
+75
+],
+"ico-settings": [
+72,
+74
+],
+"ico-people": [
+72,
+73
+],
+"ico-chat": [
+72,
+74
+],
+"mascots": [
+412,
+318
+],
+"card-question": [
+268,
+355
+],
+"card-tour": [
+263,
+355
+],
+"card-bonne": [
+265,
+359
+],
+"card-mauvaise": [
+265,
+359
+],
+"panel-teams": [
+394,
+346
+]
+}

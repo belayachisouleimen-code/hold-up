@@ -1,0 +1,4 @@
+# Netlify reconstruit le site à chaque mise à jour du dépôt
+[build]
+  command = "node scripts/build.js"
+  publish = "dist"
