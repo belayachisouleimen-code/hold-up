@@ -4,9 +4,10 @@
 (() => {
   const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ', CLUBCHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const rand = (n, set) => Array.from({ length: n }, () => set[Math.floor(Math.random() * set.length)]).join('');
-  const fail = (msg, cause) => { const e = new Error(msg); e.user = true; e.cause = cause; return e; };
+  const fail = (msg, cause) => { const detail = cause && (cause.message || cause.msg || cause.error_description); const e = new Error(detail ? `${msg} (${detail})` : msg); e.user = true; e.cause = cause; return e; };
 
   function supabaseNet(url, key){
+    url = String(url).trim().replace(/\/(rest|auth|realtime)\/v1\/?.*$/, '').replace(/\/+$/, ''); // tolère une adresse copiée avec /rest/v1/
     const sb = window.supabase.createClient(url, key, { realtime: { params: { eventsPerSecond: 20 } } });
     let uid = null;
     const ok = ({ data, error }, msg) => { if (error) throw fail(msg || 'Erreur réseau, réessaie.', error); return data; };
