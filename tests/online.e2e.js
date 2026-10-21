@@ -39,7 +39,7 @@ const server = http.createServer((req, res) => {
   await a1.fill('#teamName', 'Les Renards'); await click(a1, '[data-a=newTeam]'); await waitText(a1, 'Tu es capitaine');
   await b1.fill('#teamName', 'Les Pirates'); await b1.press('#teamName', 'Enter'); await waitText(b1, 'Tu es capitaine');
   await waitText(a2, 'Les Renards'); await click(a2, '[data-a=joinTeam][data-v="Les Renards"]'); await waitText(a2, 'Ton capitaine mise');
-  await waitText(host, 'AliceAmine'); ok('lobby : 2 équipes, capitaine + coéquipier');
+  await host.waitForFunction(() => { const t = document.querySelector('main').textContent; return /Alice/.test(t) && /Amine/.test(t); }); ok('lobby : 2 équipes, capitaine + coéquipier');
   // Doublon de nom refusé côté hôte ? (même nom = rejoindre) — erreur : nom vide
   await host.selectOption('#setRounds', '6');
   await click(host, '[data-a=start]'); await waitText(host, 'Ouvrir les enchères'); await waitText(a1, 'L’annonce'); ok('partie lancée, annonce reçue');
