@@ -1,0 +1,14 @@
+// Avatars : photo envoyée et perso animal visibles sur l'écran de la table (mode démo).
+// node tests/avatars.e2e.js <photo.jpg> <dossier de captures>
+const http=require('http'),fs=require('fs'),path=require('path');const {chromium}=require('playwright');const root=path.join(__dirname,'..','dist');
+const srv=http.createServer((q,r)=>{let p=path.join(root,new URL(q.url,'http://x').pathname);if(fs.existsSync(p)&&fs.statSync(p).isDirectory())p=path.join(p,'index.html');if(!fs.existsSync(p)){r.writeHead(404);return r.end()}r.writeHead(200,{'content-type':{'.js':'text/javascript','.css':'text/css','.html':'text/html','.webp':'image/webp','.png':'image/png'}[path.extname(p)]||'application/octet-stream'});fs.createReadStream(p).pipe(r)});
+(async()=>{await new Promise(r=>srv.listen(0,r));const base=`http://localhost:${srv.address().port}/?demo=1`;const b=await chromium.launch();const c=await b.newContext({viewport:{width:400,height:860}});await c.route(/fonts|cdnjs/,r=>r.abort());const errs=[];
+const host=await c.newPage();host.on('pageerror',e=>errs.push(e.message));await host.goto(base);await host.click('[data-a=editPseudo]');await host.fill('#pseudo','Soul');await host.click('[data-a=savePseudo]');await host.click('.mode[data-a=create]');await host.waitForSelector('.roomcode');const code=(await host.textContent('.roomcode')).trim();
+const p=await c.newPage();p.on('pageerror',e=>errs.push(e.message));await p.goto(base);await p.click('[data-a=editPseudo]');
+await p.setInputFiles('#photo',process.argv[2]);await p.waitForSelector('.me-preview img.photo');const len=await p.evaluate(()=>JSON.parse(localStorage.getItem('holdup-avatar')).length);console.log('photo encodée :',len,'caractères');
+await p.screenshot({path:process.argv[3]+'/av_profile.png'});
+await p.fill('#pseudo','Léa');await p.click('[data-a=savePseudo]');await p.fill('#joinCode',code);await p.click('[data-a=join]');await p.waitForSelector('#teamName');await p.click('[data-a=newTeam]');await p.waitForSelector('text=Tu es capitaine');
+await host.waitForSelector('.seat img.photo',{timeout:5000});console.log('photo visible sur l’écran de la table');
+const q=await c.newPage();q.on('pageerror',e=>errs.push(e.message));await q.goto(base);await q.click('[data-a=editPseudo]');await q.click('[data-a=avatar][data-v="a:raton"]');await q.fill('#pseudo','Max');await q.click('[data-a=savePseudo]');await q.fill('#joinCode',code);await q.click('[data-a=join]');await q.waitForSelector('#teamName');await q.click('[data-a=newTeam]');await q.waitForSelector('text=Tu es capitaine');
+await host.waitForSelector('.seat .ani[aria-label="Raton laveur"]',{timeout:5000});console.log('raton laveur visible sur la table');
+await host.screenshot({path:process.argv[3]+'/av_lobby.png'});console.log('erreurs',errs);await b.close();srv.close()})().catch(e=>{console.error(e.message);process.exit(1)});

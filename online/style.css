@@ -178,3 +178,17 @@ button.choice{border-color:var(--felt-line);background:rgba(255,255,255,.06)}
 input.code{min-width:0}
 .home-hero .logo{width:min(210px,60%)}
 .home-hero .hero-mascots{width:min(230px,62%)}
+
+/* ---------- Avatars : photo ou perso animal ---------- */
+.av{width:1.7em;aspect-ratio:1;height:auto;border-radius:50%;flex:0 0 auto;vertical-align:middle;border:2px solid var(--gold);box-shadow:0 0 0 2px #8a5a12,0 2px 4px rgba(0,0,0,.4)}
+.av.photo{object-fit:cover;background:#222}
+.av.ani{display:inline-grid;place-items:center;container-type:inline-size;background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--c) 70%,#fff),var(--c) 60%,color-mix(in srgb,var(--c) 70%,#000))}
+.av.ani i{font-style:normal;font-size:62cqw;line-height:1}
+.av.sm{width:36px}.av.md{width:56px}.av.lg{width:100%}.av.xl{width:96px}
+.member .av{width:28px}
+.avatars{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.avpick{padding:3px}
+.me-preview{display:flex;align-items:center;gap:16px}
+.photo-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:10px 14px;border-radius:12px;border:2px solid var(--gold);background:var(--gold);color:var(--gold-ink);font-weight:800;cursor:pointer}
+.photo-btn input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.photo-btn:focus-within{outline:3px solid var(--ink);outline-offset:2px}

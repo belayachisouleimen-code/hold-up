@@ -16,9 +16,35 @@
   const catImg = (c, cls = 'catcard') => `<img class="${cls}" src="${A('cat-' + (CAT[c] || 'mystere'))}" alt="${esc(c)}">`;
   const qcard = (text, cls = '') => `<div class="qcard ${cls}"><p>${esc(text)}</p></div>`;
   const crown = `<img class="mini-ico" src="${A('coin-crown')}" alt="capitaine" title="Capitaine">`;
-  const AVATARS = 6;
-  const myAvatar = () => { let v = Number(ls.get('holdup-avatar')); if (!(v >= 1 && v <= AVATARS)){ v = 1 + Math.floor(Math.random() * AVATARS); ls.set('holdup-avatar', v); } return v; };
-  const avatar = (n, cls = 'av') => `<img class="${cls}" src="${A('avatar-' + (n >= 1 && n <= AVATARS ? n : 1))}" alt="">`;
+  // Avatars : une photo (« p:data:image/… ») ou un perso animal (« a:chat »)
+  const ANIMALS = [['chat', '🐱', 'Chat', '#f6b93b'], ['chien', '🐶', 'Chien', '#d6452f'], ['raton', '🦝', 'Raton laveur', '#6d7bb8'], ['tortue', '🐢', 'Tortue', '#3f9b5b'], ['girafe', '🦒', 'Girafe', '#e9a527'], ['renard', '🦊', 'Renard', '#e2733a'],
+    ['panda', '🐼', 'Panda', '#8a93b8'], ['grenouille', '🐸', 'Grenouille', '#58b368'], ['singe', '🐵', 'Singe', '#a8693a'], ['lion', '🦁', 'Lion', '#f0a830'], ['pieuvre', '🐙', 'Pieuvre', '#c24f8f'], ['flamant', '🦩', 'Flamant rose', '#e77fa8']];
+  const PHOTO_MAX = 1750; // une action doit rester sous 2 000 octets côté serveur (pseudo et équipe compris)
+  const cleanAvatar = v => {
+    if (typeof v === 'number' && v >= 1) return 'a:' + ANIMALS[(v - 1) % ANIMALS.length][0]; // anciens avatars 1 à 6
+    if (typeof v !== 'string') return null;
+    if (/^p:data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= PHOTO_MAX) return v;
+    return ANIMALS.some(a => 'a:' + a[0] === v) ? v : null;
+  };
+  const myAvatar = () => { let v = cleanAvatar(ls.get('holdup-avatar')); if (!v){ v = 'a:' + ANIMALS[Math.floor(Math.random() * ANIMALS.length)][0]; ls.set('holdup-avatar', v); } return v; };
+  const avatar = (v, cls = 'av') => {
+    v = cleanAvatar(v) || 'a:chat';
+    if (v.startsWith('p:')) return `<img class="${cls} photo" src="${v.slice(2)}" alt="">`;
+    const a = ANIMALS.find(x => 'a:' + x[0] === v);
+    return `<span class="${cls} ani" style="--c:${a[3]}" role="img" aria-label="${a[2]}"><i>${a[1]}</i></span>`;
+  };
+  // Photo : recadrage carré au centre, puis compression jusqu'à tenir dans PHOTO_MAX
+  async function photoToAvatar(file){
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+    const side = Math.min(img.naturalWidth, img.naturalHeight), sx = (img.naturalWidth - side) / 2, sy = (img.naturalHeight - side) / 2;
+    for (const size of [72, 64, 56, 48, 40]) for (const q of [0.72, 0.6, 0.5, 0.4]) for (const type of ['image/webp', 'image/jpeg']){
+      const c = document.createElement('canvas'); c.width = c.height = size;
+      c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      const url = c.toDataURL(type, q);
+      if (url.startsWith('data:' + type) && url.length + 2 <= PHOTO_MAX) return 'p:' + url;
+    }
+    throw rule('Photo trop lourde, essaie une autre.');
+  }
   const member = (m, captainId) => `<span class="member">${avatar(m.avatar)}${m.id === captainId ? crown : ''}${esc(m.pseudo)}</span>`;
   const RANKS = [[25, 'legende', 'Légende'], [15, 'diamant', 'Diamant'], [10, 'platine', 'Platine'], [5, 'or', 'Or'], [2, 'argent', 'Argent'], [0, 'bronze', 'Bronze']];
   const rankOf = wins => RANKS.find(([min]) => wins >= min);
@@ -155,7 +181,7 @@
     const id = row.user_id, p = row.payload || {}, L = priv.lobby, g = priv.g;
     try {
       if (p.type === 'join'){
-        const pseudo = clean(p.pseudo, 24) || 'Invité', name = clean(p.team, 24), av = Number.isInteger(p.avatar) && p.avatar >= 1 && p.avatar <= 6 ? p.avatar : 1;
+        const pseudo = clean(p.pseudo, 24) || 'Invité', name = clean(p.team, 24), av = cleanAvatar(p.avatar) || 'a:chat';
         if (!name) throw rule('Donne un nom d’équipe.');
         const findTeam = () => L.teams.findIndex(t => t.name.toLowerCase() === name.toLowerCase());
         const cur = teamIdxOf(id);
@@ -271,7 +297,8 @@
   function pseudoView(){
     const cur = myAvatar();
     return header() + `<section class="panel"><h2>Ton profil</h2><p class="dim">Pas de compte : ton pseudo et ton avatar restent sur cet appareil.</p>
-      <span class="label">Avatar</span><div class="avatars" role="radiogroup" aria-label="Avatar">${Array.from({ length: AVATARS }, (_, i) => `<button class="avpick" role="radio" aria-checked="${cur === i + 1}" aria-label="Avatar ${i + 1}" data-a="avatar" data-v="${i + 1}">${avatar(i + 1, 'av lg')}</button>`).join('')}</div>
+      <div class="me-preview">${avatar(cur, 'av xl')}<div class="stack"><label class="photo-btn"><input id="photo" type="file" accept="image/*" capture="user">📷 ${cur.startsWith('p:') ? 'Changer ma photo' : 'Mettre ma photo'}</label>${cur.startsWith('p:') ? '<button class="ghost mini" data-a="avatar" data-v="a:chat">Retirer ma photo</button>' : ''}</div></div>
+      <span class="label">Ou choisis un perso</span><div class="avatars" role="radiogroup" aria-label="Perso">${ANIMALS.map(a => `<button class="avpick" role="radio" aria-checked="${cur === 'a:' + a[0]}" aria-label="${a[2]}" data-a="avatar" data-v="a:${a[0]}">${avatar('a:' + a[0], 'av lg')}</button>`).join('')}</div>
       <label>Pseudo<input id="pseudo" maxlength="24" value="${val('pseudo', me.pseudo)}" autocomplete="nickname"></label>${errBox(ui.err)}
       <button data-a="savePseudo">Continuer</button></section>`;
   }
@@ -538,6 +565,7 @@
   app.addEventListener('change', e => {
     const el = e.target;
     if (el.id === 'greedy'){ ui.greedy = el.checked; render(); return; }
+    if (el.id === 'photo' && el.files && el.files[0]){ photoToAvatar(el.files[0]).then(v => { ls.set('holdup-avatar', v); ui.err = ''; render(); }).catch(e => { ui.err = e.message || 'Photo illisible.'; render(); }); return; }
     if (el.id === 'roomClub'){ ui.inputs.roomClub = el.value; return; }
     if (el.id === 'soloRounds'){ ui.soloRounds = Number(el.value); return; }
     if (el.id === 'soloGreed'){ ui.soloGreed = el.value === '1'; return; }
@@ -562,7 +590,7 @@
           ui.view = room ? 'room' : 'home'; loadClubs(); break;
         }
         case 'editPseudo': ui.inputs.pseudo = me.pseudo; ui.view = 'pseudo'; break;
-        case 'avatar': ls.set('holdup-avatar', Number(v)); break;
+        case 'avatar': ls.set('holdup-avatar', v); break;
         case 'invite': {
           const text = `Rejoins mon club HOLD UP! avec le code ${v} : ${location.origin}${location.pathname}`;
           try { if (navigator.share){ await navigator.share({ title: 'HOLD UP!', text }); break; } } catch (e) { if (e && e.name === 'AbortError') break; }

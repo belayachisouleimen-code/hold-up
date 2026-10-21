@@ -33,10 +33,11 @@ Sans configuration Supabase, la version en ligne tourne en **mode démo** : chaq
 L'hôte peut aussi jouer depuis son appareil (onglet « Mon équipe »).
 
 ## Kit graphique (v2)
-- `online/assets/` : éléments découpés de la planche du kit 2 (logo, 8 cartes de catégories, jetons 1 à 500, boutons Miser / Suivre / Relancer / Se coucher / Valider / Passer / All in / Quitter / Inviter des amis, jetons x2 / x5 / x10, carte question en paysage, carte mystère, 6 avatars, badges de rang Bronze à Légende, cartes Bonne / Mauvaise réponse, bandeaux Classement et Mon club, icônes).
+- `online/assets/` : éléments découpés de la planche du kit 2 (logo, 8 cartes de catégories, jetons 1 à 500, boutons Miser / Suivre / Relancer / Se coucher / Valider / Passer / All in / Quitter / Inviter des amis, jetons x2 / x5 / x10, carte question en paysage, carte mystère, badges de rang Bronze à Légende, cartes Bonne / Mauvaise réponse, bandeaux Classement et Mon club, icônes).
 - Repris du kit 1 : la carte « Votre tour ! » et les mascottes de l'accueil (absentes du kit 2).
 - `scripts/slice-kit.py <planche.png> <dossier>` : refait le découpage (positions du kit 2).
-- Dans le jeu : choix d'un avatar avec le pseudo (affiché dans les équipes, le classement et le club), carte mystère quand une équipe gagne sans révéler, badges de rang dans le classement du club (Argent dès 2 victoires, Or 5, Platine 10, Diamant 15, Légende 25), bouton Inviter des amis (partage ou copie du code du club), bouton Quitter.
+- Avatars : chaque joueur met **sa photo** (appareil photo ou galerie, recadrée et compressée sur le téléphone) **ou un perso animal** (chat, chien, raton laveur, tortue, girafe, renard, panda, grenouille, singe, lion, pieuvre, flamant rose) dans un médaillon doré. Affiché dans les équipes, le classement et le club.
+- Dans le jeu : carte mystère quand une équipe gagne sans révéler, badges de rang dans le classement du club (Argent dès 2 victoires, Or 5, Platine 10, Diamant 15, Légende 25), bouton Inviter des amis (partage ou copie du code du club), bouton Quitter.
 - Non utilisés pour l'instant : « La réponse était… » (illustration propre à une question), pastille d'équipe. Le sablier sert au chrono, sa barre est redessinée en CSS.
 
 ## Architecture
