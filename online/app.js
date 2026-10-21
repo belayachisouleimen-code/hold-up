@@ -7,7 +7,12 @@
   const A = n => `assets/${n}.webp`;
   const chips = n => `<img class="coin" src="${A('coins')}" alt="">${n}`;
   const CAT = { 'Géographie': 'general', 'Histoire': 'histoire', 'Sciences': 'sciences', 'Tech': 'sciences', 'Cinéma': 'culture-pop', 'Culture pop': 'culture-pop', 'Musique': 'culture-pop',
-    'Sport': 'sport', 'Art': 'arts', 'Littérature': 'arts', 'Nature': 'nature', 'Espace': 'insolite', 'Cuisine': 'insolite' };
+    'Sport': 'sport', 'Art': 'arts', 'Littérature': 'arts', 'Nature': 'nature', 'Espace': 'insolite', 'Cuisine': 'insolite', 'Général': 'general', 'Arts': 'arts', 'Insolite': 'insolite' };
+  const TEAM_NAMES = ['Les Renards', 'Les Pirates', 'Les Insolents', 'Les Cerveaux Fous', 'Team Apéro', 'Les Bluffeurs', 'Les Je-sais-tout', 'Les Requins', 'Les Flambeurs', 'Les Outsiders'];
+  const freeName = taken => { const t = new Set(taken.map(x => x.toLowerCase())); const free = TEAM_NAMES.filter(n => !t.has(n.toLowerCase())); return free[Math.floor(Math.random() * free.length)] || 'Équipe ' + (taken.length + 1); };
+  // Durées des chronos (mode auto)
+  const T = { tease: 8000, bet: 40000, answers: 45000, result: 15000 };
+  if (/[?&]fast=1/.test(location.search)) Object.keys(T).forEach(k => { T[k] = Math.round(T[k] / 20); }); // tests
   const catImg = (c, cls = 'catcard') => `<img class="${cls}" src="${A('cat-' + (CAT[c] || 'mystere'))}" alt="${esc(c)}">`;
   const qcard = (text, cls = '') => `<div class="qcard ${cls}"><p>${esc(text)}</p></div>`;
   const crown = `<img class="mini-ico" src="${A('coin-crown')}" alt="capitaine" title="Capitaine">`;
@@ -22,16 +27,19 @@
   const rule = m => { const e = new Error(m); e.rule = true; return e; };
   const ls = { get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 
-  let me = null, room = null, isHost = false, priv = null;
+  let me = null, room = null, isHost = false, priv = null, solo = null, hostTimer = null, wakeLock = null;
+  const seen = {}; // première fois qu'un chrono a été vu sur cet appareil (évite les écarts d'horloge)
   let ui = { view: 'boot', err: '', busy: false, tab: 'table', inputs: {} };
   let unsubs = [], hostChain = Promise.resolve(), clubsCache = null;
 
   // ---------- démarrage ----------
   async function boot(){
     try { me = await net.init(); }
-    catch (e){ app.innerHTML = `<section class="panel"><h2>Connexion impossible</h2><p>${esc(e.message)}</p><button onclick="location.reload()">Réessayer</button></section>`; return; }
-    const code = new URLSearchParams(location.search).get('room');
-    if (!me.pseudo){ ui.view = 'pseudo'; ui.pendingRoom = code; render(); return; }
+    catch (e){ me = { id: null, pseudo: ls.get('holdup-pseudo') || 'Toi', offline: true }; ui.netError = e.message; }
+    const qs = new URLSearchParams(location.search), code = qs.get('room');
+    if (qs.get('mode') === 'solo'){ openSolo(); return; }
+    if (me.offline){ ui.view = 'home'; render(); return; }
+    if (!me.pseudo && code){ ui.view = 'pseudo'; ui.pendingRoom = code; render(); return; }
     if (code) await enterRoom(code); else { ui.view = 'home'; render(); }
   }
 
@@ -42,14 +50,15 @@
     code = clean(code, 4).toUpperCase();
     ui.err = '';
     const r = await net.getRoom(code).catch(e => { ui.err = e.message; return null; });
-    if (!r){ ui.err = ui.err || `Aucun salon « ${code} ». Vérifie le code.`; ui.view = 'home'; setUrl(null); render(); return; }
+    if (!r){ if (ls.get('holdup-last-room') === code) ls.set('holdup-last-room', null); ui.err = ui.err || `Aucun salon « ${code} ». Vérifie le code.`; ui.view = 'home'; setUrl(null); render(); return; }
     leaveRoom(true);
     room = r; isHost = r.host_id === me.id; ui.view = 'room'; ui.tab = 'table'; setUrl(code);
+    ls.set('holdup-last-room', code); keepAwake();
     unsubs.push(net.subscribeRoom(code, row => onRoom(row)));
     if (isHost) await hostAttach();
     render();
   }
-  function leaveRoom(silent){ unsubs.forEach(f => { try { f(); } catch (e) {} }); unsubs = []; room = null; isHost = false; priv = null; if (!silent){ setUrl(null); ui.view = 'home'; render(); } }
+  function leaveRoom(silent){ unsubs.forEach(f => { try { f(); } catch (e) {} }); unsubs = []; clearTimeout(hostTimer); room = null; isHost = false; priv = null; if (!silent){ setUrl(null); ui.view = 'home'; render(); } }
 
   function onRoom(row){
     if (!room || row.code !== room.code) return;
@@ -66,6 +75,9 @@
     const remote = await net.loadPrivate(room.code).catch(() => null);
     const pick = [local, remote].filter(Boolean).sort((a, b) => b.rev - a.rev)[0];
     priv = pick || { rev: room.state.rev || 0, lobby: room.state.lobby, g: null, lastAction: 0, errors: {}, playedAt: null, recorded: false, clubErr: '' };
+    priv.lobby.settings.pace = priv.lobby.settings.pace || 'auto';
+    if (priv.lobby.settings.club === undefined) priv.lobby.settings.club = room.club_code || '';
+    scheduleHost();
     unsubs.push(net.subscribeActions(room.code, row => hostQueue(() => handleAction(row)), () => hostQueue(async () => {
       const rows = await net.fetchActionsSince(room.code, priv.lastAction);
       for (const row of rows) await handleAction(row);
@@ -76,7 +88,7 @@
 
   function publicState(){
     const g = priv.g;
-    return { v: 1, rev: priv.rev, status: g ? (g.phase === 'end' ? 'end' : 'game') : 'lobby', lobby: priv.lobby, game: g ? H.publicView(g) : null, errors: priv.errors, club: room.club_code || null, clubErr: priv.clubErr || '' };
+    return { v: 1, rev: priv.rev, status: g ? (g.phase === 'end' ? 'end' : 'game') : 'lobby', lobby: priv.lobby, game: g ? H.publicView(g) : null, errors: priv.errors, club: priv.lobby.settings.club || room.club_code || null, clubErr: priv.clubErr || '', timer: timerSpec(), paused: !!priv.paused };
   }
   async function commit(){
     if (priv.g && priv.g.phase === 'end') await recordClub();
@@ -88,7 +100,42 @@
     ls.set('holdup-host-' + room.code, priv);
     await net.publishState(room.code, state);
     net.savePrivate(room.code, priv).catch(() => {});
+    scheduleHost();
   }
+
+  // ---------- chronos (hôte) : la partie avance seule, une équipe qui traîne passe ou se couche ----------
+  function timerSpec(){
+    const g = priv && priv.g;
+    if (!g || priv.lobby.settings.pace !== 'auto' || priv.paused) return null;
+    if (g.phase === 'tease') return { key: `t-${g.round}`, ms: T.tease, kind: 'tease' };
+    if (g.phase === 'bet') return { key: `b-${g.round}-${g.street}-${g.log.length}`, ms: T.bet, kind: 'bet' };
+    if (g.phase === 'answers') return { key: `a-${g.round}`, ms: T.answers, kind: 'answers' };
+    if (g.phase === 'result') return { key: `r-${g.round}`, ms: T.result, kind: 'result' };
+    return null;
+  }
+  function scheduleHost(){
+    clearTimeout(hostTimer);
+    const spec = timerSpec(); if (!spec) return;
+    const left = Math.max(300, spec.ms - (Date.now() - (seen[spec.key] = seen[spec.key] || Date.now())));
+    hostTimer = setTimeout(() => {
+      const now = timerSpec(); if (!now || now.key !== spec.key) return;
+      hostDo(() => {
+        const g = priv.g;
+        if (now.kind === 'tease') H.openStreet(g);
+        else if (now.kind === 'result') H.startRound(g);
+        else if (now.kind === 'bet'){ const L = H.legal(g), name = g.teams[g.toAct].name; H.act(g, L.canCheck ? 'check' : 'fold'); g.log.push(`⏱ Temps écoulé pour ${name}.`); }
+        else if (now.kind === 'answers') H.pendingAnswers(g).forEach(i => { if (g.phase === 'answers') H.abandon(g, i); });
+      });
+    }, left);
+  }
+  const chronoBar = spec => {
+    if (!spec) return '';
+    const start = seen[spec.key] = seen[spec.key] || Date.now();
+    const left = Math.max(0, spec.ms - (Date.now() - start)), pct = Math.round(left / spec.ms * 100);
+    return `<div class="chrono" role="timer" aria-label="Temps restant"><img src="${A('bar-sablier')}" alt=""><span class="track"><i style="width:${pct}%;animation-duration:${left}ms"></i></span></div>`;
+  };
+  async function keepAwake(){ try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) {} }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (room || solo)) keepAwake(); });
 
   const teamIdxOf = id => priv.lobby.teams.findIndex(t => t.members.some(m => m.id === id));
   function removeMember(id){
@@ -147,9 +194,10 @@
       return { team: t.name, chips: t.chips, rank, players: (priv.lobby.teams[i] || { members: [] }).members.map(m => ({ id: m.id, pseudo: m.pseudo, avatar: m.avatar })) }; });
   }
   async function recordClub(){
-    if (!room.club_code || priv.recorded) return;
+    const club = priv.lobby.settings.club || room.club_code;
+    if (!club || priv.recorded) return;
     priv.playedAt = priv.playedAt || new Date().toISOString();
-    try { await net.addClubResult(room.club_code, room.code, ranking(priv.g), priv.playedAt); priv.recorded = true; priv.clubErr = ''; }
+    try { await net.addClubResult(club, room.code, ranking(priv.g), priv.playedAt); priv.recorded = true; priv.clubErr = ''; }
     catch (e){ priv.clubErr = e.message; }
   }
 
@@ -165,8 +213,9 @@
     next(){ H.startRound(priv.g); },
     abandon(seat){ H.abandon(priv.g, seat); },
     kick(i){ if (priv.g) throw rule('Partie en cours.'); priv.lobby.teams.splice(i, 1); },
-    replay(){ priv.g = null; },
-    setting(k, v){ if (priv.g) return; priv.lobby.settings[k] = v; }
+    replay(){ priv.g = null; priv.paused = false; },
+    pause(){ priv.paused = !priv.paused; Object.keys(seen).forEach(k => delete seen[k]); },
+    setting(k, v){ if (priv.g && k !== 'pace') return; priv.lobby.settings[k] = v; }
   };
 
   // ---------- joueur ----------
@@ -177,7 +226,7 @@
     catch (e){ ui.busy = false; ui.err = e.message; render(); return; }
     setTimeout(() => { if (ui.busy){ ui.busy = false; ui.err = 'Pas de réponse de l’hôte. Son écran est-il toujours ouvert ?'; render(); } }, 8000);
   }
-  const myTeam = () => room.state.lobby.teams.findIndex(t => t.members.some(m => m.id === me.id));
+  const myTeam = () => room ? room.state.lobby.teams.findIndex(t => t.members.some(m => m.id === me.id)) : -1;
   const ansKey = () => `holdup-ans-${room.code}-${room.state.game ? room.state.game.round : 0}`;
 
   // ---------- rendu ----------
@@ -187,8 +236,8 @@
     const focused = document.activeElement && document.activeElement.id;
     const caret = focused && document.activeElement.selectionStart;
     app.classList.toggle('wide', ui.view === 'room' && isHost && ui.tab === 'table');
-    app.innerHTML = (net.demo ? `<p class="banner">Mode démo : Supabase n’est pas configuré. Chaque onglet de ce navigateur joue le rôle d’un téléphone.</p>` : '') +
-      ({ pseudo: pseudoView, home: homeView, clubs: clubsView, room: roomView }[ui.view])();
+    app.innerHTML = (net.demo && ui.view !== 'solo' && ui.view !== 'soloSetup' ? `<p class="banner">Mode démo : Supabase n’est pas configuré. Chaque onglet de ce navigateur joue le rôle d’un téléphone.</p>` : '') +
+      ({ pseudo: pseudoView, home: homeView, clubs: clubsView, room: roomView, rules: rulesView, soloSetup: soloSetupView, solo: soloView }[ui.view])();
     if (focused){ const el = document.getElementById(focused); if (el){ el.focus({ preventScroll: true }); if (caret != null && el.setSelectionRange) try { el.setSelectionRange(caret, caret); } catch (e) {} } }
     const qr = document.getElementById('qr');
     if (qr && window.QRCode && !qr.childElementCount) try { new window.QRCode(qr, { text: joinUrl(room.code), width: 132, height: 132 }); } catch (e) {}
@@ -217,7 +266,7 @@
     setTimeout(() => o.remove(), 1800);
   }
   const val = (id, d = '') => esc(ui.inputs[id] ?? d);
-  const header = (hero = false) => `<header class="brand"><img class="logo" src="${A('logo')}" alt="HOLD UP! Mise sur ton savoir">${hero ? `<img class="hero-mascots" src="${A('mascots')}" alt="">` : ''}</header>`;
+  const header = (hero = false) => `<header class="brand ${hero ? 'home-hero' : ''}"><img class="logo" src="${A('logo')}" alt="HOLD UP! Mise sur ton savoir">${hero ? `<img class="hero-mascots" src="${A('mascots')}" alt="">` : ''}</header>`;
 
   function pseudoView(){
     const cur = myAvatar();
@@ -228,16 +277,71 @@
   }
 
   function homeView(){
-    const clubs = clubsCache || [];
-    return header(true) + `<div class="hello">${avatar(myAvatar(), 'av md')}<p>Salut <b>${esc(me.pseudo)}</b></p><button class="ghost mini" data-a="editPseudo">Modifier mon profil</button></div>
+    const last = ls.get('holdup-last-room'), soloSave = ls.get('holdup-solo');
+    const resume = [
+      soloSave && soloSave.g && soloSave.g.phase !== 'end' ? `<button class="ghost" data-a="soloResume">Reprendre la partie sur ce téléphone (manche ${soloSave.g.round}/${soloSave.g.rounds})</button>` : '',
+      last ? `<button class="ghost" data-a="rejoin" data-v="${esc(last)}">Revenir au salon ${esc(last)}</button>` : ''
+    ].join('');
+    const off = me.offline ? `<p class="notice small">Le jeu en ligne est indisponible pour l’instant (${esc(ui.netError || 'connexion impossible')}). Le mode un seul téléphone marche quand même.</p>` : '';
+    return header(true) + off + `<div class="hello">${avatar(myAvatar(), 'av md')}<p>${me.pseudo ? `Salut <b>${esc(me.pseudo)}</b>` : 'Bienvenue !'}</p><button class="ghost mini" data-a="editPseudo">${me.pseudo ? 'Profil' : 'Choisir mon pseudo'}</button></div>
+      ${resume ? `<div class="stack">${resume}</div>` : ''}
+      <div class="modes">
+        <button class="mode" data-a="soloNew"><span class="mode-t">Un seul téléphone</span><span class="mode-s">On se le passe autour de la table. Rien d’autre à installer.</span></button>
+        <button class="mode" data-a="create" ${me.offline ? 'disabled' : ''}><span class="mode-t">Chacun son téléphone</span><span class="mode-s">Ton écran devient la table, les équipes jouent sur leur téléphone.</span></button>
+      </div>
       <section class="panel"><h2>Rejoindre une table</h2>
-        <label>Code du salon<input id="joinCode" class="code" maxlength="4" value="${val('joinCode')}" autocomplete="off" autocapitalize="characters"></label>
-        <button data-a="join">Rejoindre</button></section>
+        <div class="row"><input id="joinCode" class="code" maxlength="4" value="${val('joinCode')}" autocomplete="off" autocapitalize="characters" aria-label="Code du salon" placeholder="CODE"><button class="fit" data-a="join">Go</button></div>
+        <p class="dim small">Ou scanne le QR code affiché sur l’écran de la table.</p></section>
       ${errBox(ui.err)}
-      <section class="panel"><h2>Créer une table</h2><p class="dim small">Ton appareil devient l’écran de la table (idéalement branché à une télé). Tu peux aussi y jouer avec ton équipe.</p>
-        <label>Club (facultatif)<select id="roomClub"><option value="">Aucun</option>${clubs.map(c => `<option value="${esc(c.code)}" ${ui.inputs.roomClub === c.code ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-        <button data-a="create">Créer un salon</button></section>
-      <section class="panel"><h2>Clubs</h2><p class="dim small">Un club garde le classement de vos soirées.</p><button class="ghost" data-a="clubs">Mes clubs</button></section>`;
+      <div class="row"><button class="ghost" data-a="rules">Comment jouer ?</button><button class="ghost" data-a="clubs">Mes clubs</button></div>`;
+  }
+
+  function rulesView(){
+    const step = (img, t, d) => `<section class="panel rule"><div class="rule-img">${img}</div><div><h2>${t}</h2><p>${d}</p></div></section>`;
+    return `<button class="ghost mini" data-a="home">← Retour</button><img class="classement-head" src="${A('logo')}" alt="HOLD UP!" style="width:min(200px,60%)">
+      ${step(`<img src="${A('cat-histoire')}" alt="" class="catcard sm">`, '1. L’annonce', 'Un thème est annoncé, pas encore la question. Vous misez vos jetons fictifs si vous le sentez bien.')}
+      ${step(`<img src="${A('btn-relancer')}" alt="" style="width:100px">`, '2. Les mises', 'Comme au poker : suivre, relancer ou se coucher. Si tout le monde se couche, le dernier gagne sans montrer sa réponse.')}
+      ${step(`<img src="${A('card-question')}" alt="" style="width:110px">`, '3. La réponse secrète', 'Chaque équipe répond en cachette. Gourmandise : 3 jetons pour une question liée. Réussie, elle passe devant tout le monde.')}
+      ${step(`<img src="${A('card-bonne')}" alt="" style="width:90px">`, '4. L’abattage', 'Les bonnes réponses se partagent le pot. Personne n’a trouvé ? Jackpot pour la manche suivante. Le plus riche à la fin gagne.')}
+      <button data-a="soloNew">C’est parti</button>`;
+  }
+
+  // ---------- mode un seul téléphone ----------
+  function setMode(m){ const u = new URL(location.href); if (m) u.searchParams.set('mode', m); else u.searchParams.delete('mode'); history.replaceState(null, '', u); }
+  function openSolo(){ setMode('solo'); const sv = ls.get('holdup-solo'); solo = sv && sv.g && sv.g.phase !== 'end' ? sv : null; ui.view = solo ? 'solo' : 'soloSetup'; if (!solo) initSoloSetup(); keepAwake(); render(); }
+  function initSoloSetup(){ const names = []; for (let i = 0; i < 3; i++) names.push(freeName(names)); ui.soloTeams = names; ui.soloRounds = ui.soloRounds || 8; ui.soloGreed = ui.soloGreed ?? true; }
+  const saveSolo = () => ls.set('holdup-solo', solo);
+  function soloSetupView(){
+    const t = ui.soloTeams;
+    return `<button class="ghost mini" data-a="home">← Retour</button>
+      <section class="panel enter"><h2>Les équipes</h2><p class="dim small">Un téléphone pour toute la table. Changez les noms si vous voulez.</p>
+        <div class="stack">${t.map((n, i) => `<div class="row"><input id="soloTeam${i}" maxlength="24" value="${esc(ui.inputs['soloTeam' + i] ?? n)}" aria-label="Équipe ${i + 1}">${t.length > 2 ? `<button class="ghost fit" data-a="soloDel" data-v="${i}" aria-label="Retirer l’équipe">✕</button>` : ''}</div>`).join('')}</div>
+        ${t.length < 6 ? `<button class="ghost" data-a="soloAdd">+ Ajouter une équipe</button>` : ''}
+        <div class="row"><label>Manches<select id="soloRounds">${[6, 8, 10, 12].map(n => `<option ${n === ui.soloRounds ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label>Gourmandise<select id="soloGreed"><option value="1" ${ui.soloGreed ? 'selected' : ''}>Oui</option><option value="0" ${ui.soloGreed ? '' : 'selected'}>Non</option></select></label></div>
+        ${errBox(ui.err)}<button data-a="soloStart">Lancer la partie</button></section>`;
+  }
+  function soloState(){ return { game: solo.g, lobby: { teams: solo.g.teams.map(() => ({ members: [] })) } }; }
+  function soloDo(fn){ solo.history = (solo.history || []).slice(-30); solo.history.push(JSON.stringify(solo.g)); ui.err = ''; try { fn(); } catch (e){ solo.history.pop(); if (e.rule) ui.err = e.message; else throw e; } saveSolo(); render(); window.scrollTo(0, 0); }
+  function soloView(){
+    const g = solo.g, q = g.question, s = soloState();
+    const undo = solo.history && solo.history.length && g.phase !== 'result' && g.phase !== 'end' ? `<button class="ghost mini" data-a="soloUndo">Annuler la dernière action</button>` : '';
+    const top = `<div class="row topbar"><img class="fit logo-sm" src="${A('logo')}" alt="HOLD UP!"><span class="who-me"><span class="dim small">Un seul téléphone</span></span>${imgBtn('soloQuit', null, 'btn-quitter', 'Quitter la partie', 'style="width:92px;flex:0 0 auto"')}</div>`;
+    let panel = '';
+    if (g.phase === 'tease') panel = `<span class="label">L’annonce · ${esc(q.category)}</span><div class="tease">${catImg(q.category)}<p class="big">${esc(q.tease)}</p></div><p class="dim small">${esc(g.teams[g.sbSeat].name)} pose ${g.sb}, ${esc(g.teams[g.bbSeat].name)} pose ${g.bb}.${g.dead ? ` Jackpot en jeu : ${g.dead}.` : ''} Discutez, provoquez-vous…</p><button data-a="soloOpen">Ouvrir les enchères</button>`;
+    else if (g.phase === 'bet'){
+      const ctx = g.street === 'pre' ? `<span class="label">Avant la question · ${esc(q.category)}</span><div class="tease small-tease">${catImg(q.category, 'catcard sm')}<p>${esc(q.tease)}</p></div>` : `<span class="label">Après les réponses</span>${qcard(q.q, 'sm')}`;
+      panel = ctx + betPanel(g).replace('<h2>À vous de parler</h2>', `<h2>Au tour de ${esc(g.teams[g.toAct].name)}</h2>`);
+    } else if (g.phase === 'answers'){
+      const seat = H.pendingAnswers(g)[0];
+      if (ui.soloReady !== `${g.round}-${seat}`) panel = `<div class="secret"><span class="label">Réponse secrète</span><span class="dim">Passe le téléphone à l’équipe</span><p class="display">${esc(g.teams[seat].name)}</p><p class="dim">Les autres, regardez ailleurs !</p><button data-a="soloReady" data-v="${g.round}-${seat}">C’est nous, on regarde</button></div>`;
+      else panel = answerPanel(g, seat);
+    } else if (g.phase === 'result'){
+      const last = g.round >= g.rounds || g.teams.filter(t => t.chips > 0).length < 2;
+      panel = resultHtml(g) + `<button data-a="soloNext">${last ? 'Classement final' : 'Manche suivante'}</button>`;
+    } else if (g.phase === 'end') panel = endHtml(s) + `<button data-a="soloAgain">Rejouer</button><button class="ghost" data-a="home">Accueil</button>`;
+    const hideSeats = g.phase === 'answers';
+    return top + statusBar(g) + `<section class="panel hot enter">${panel}${errBox(ui.err)}${undo}</section>` + (hideSeats ? '' : seatsHtml(s));
   }
 
   function clubsView(){
@@ -324,13 +428,15 @@
       return `<div class="host-grid">
         <section class="panel enter"><span class="label">Rejoignez la table</span>
           <div class="joinbox"><div class="stack"><span class="roomcode">${esc(room.code)}</span><span class="link">${esc(joinUrl(room.code))}</span></div><div id="qr" class="qr"></div></div>
-          <p class="dim small">Chaque équipe rejoint avec son téléphone : le premier joueur de l’équipe en devient le capitaine.</p>
+          ${imgBtn('shareRoom', room.code, 'btn-inviter', 'Inviter des amis', 'style="max-width:260px"')}${ui.shared ? '<p class="notice small">Lien copié : envoie-le à tes amis.</p>' : ''}
+          <p class="dim small">Chaque équipe rejoint avec son téléphone (QR code, lien ou code). Le premier joueur de l’équipe en devient le capitaine. Pour jouer aussi, va dans « Mon équipe ».</p>
           ${lobbyTeams(s, true)}</section>
         <section class="panel"><h2>Réglages</h2>
           <div class="row"><label>Manches<select id="setRounds" data-setting="rounds">${[6, 8, 10, 12].map(n => `<option ${n === st.rounds ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
           <label>Jetons<select id="setChips" data-setting="startChips">${[20, 30, 50].map(n => `<option ${n === st.startChips ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
           <label>Gourmandise<select id="setGreed" data-setting="greed"><option value="1" ${st.greed ? 'selected' : ''}>Activée</option><option value="0" ${st.greed ? '' : 'selected'}>Désactivée</option></select></label>
-          ${room.club_code ? `<p class="dim small">Partie comptée dans le club ${esc(room.club_code)}.</p>` : ''}
+          <label>Rythme<select id="setPace" data-setting="pace"><option value="auto" ${st.pace !== 'libre' ? 'selected' : ''}>Auto : la partie avance seule, avec chrono</option><option value="libre" ${st.pace === 'libre' ? 'selected' : ''}>Libre : l’hôte fait avancer</option></select></label>
+          <label>Compter dans un club<select id="setClub" data-setting="club"><option value="">Non</option>${(clubsCache || []).map(c => `<option value="${esc(c.code)}" ${st.club === c.code ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
           ${err}<button data-a="start" ${L.teams.length < 2 ? 'disabled' : ''}>Lancer la partie (${L.teams.length} équipe${L.teams.length > 1 ? 's' : ''})</button></section></div>`;
     }
     const pub = s.game, q = g.question;
@@ -341,7 +447,7 @@
     } else if (g.phase === 'bet'){
       const L2 = H.legal(g);
       main = (g.street === 'pre' ? `<span class="label">Enchères avant la question · ${esc(q.category)}</span><div class="tease">${catImg(q.category)}<p class="big">${esc(q.tease)}</p></div>` : `<span class="label">Enchères après les réponses</span>${qcard(q.q, 'host')}`)
-        + `<h2>À ${esc(g.teams[g.toAct].name)} de parler</h2><p class="dim">${L2.owe ? `Mise à suivre : ${L2.owe}` : 'Personne n’a misé sur ce tour'}</p>`;
+        + `<h2>Au tour de ${esc(g.teams[g.toAct].name)}</h2><p class="dim">${L2.owe ? `Mise à suivre : ${L2.owe}` : 'Personne n’a misé sur ce tour'}</p>`;
     } else if (g.phase === 'answers'){
       const n = H.pendingAnswers(g).length;
       main = `<span class="label">Réponses secrètes · ${esc(q.category)}</span>${qcard(q.q, 'host')}<p class="dim" style="text-align:center">${n ? `En attente de ${n} équipe${n > 1 ? 's' : ''}…` : ''}</p>`;
@@ -352,9 +458,12 @@
     } else if (g.phase === 'end'){
       main = endHtml(s); controls = `<button data-a="replay">Rejouer avec les mêmes équipes</button>`;
     }
+    const auto = L.settings.pace !== 'libre';
+    if (auto && (g.phase === 'tease' || g.phase === 'result')) controls = controls.replace('<button ', '<button class="ghost" ');
+    if (auto && g.phase !== 'end') controls += `<button class="ghost mini" data-a="pause">${priv.paused ? '▶ Reprendre le chrono' : '⏸ Pause'}</button>`;
     const log = g.log.slice(-6).map(l => `<span>${esc(l)}</span>`).join('');
     return statusBar(g, `<span class="tag">Salon ${esc(room.code)}</span>`) + `<div class="host-grid">
-      <section class="panel enter">${main}${err}${controls}</section>
+      <section class="panel enter">${chronoBar(s.timer)}${main}${err}${controls}</section>
       <div class="stack">${seatsHtml(s, { host: true, members: true })}<div class="panel"><span class="label">Journal</span><div class="log">${log}</div></div></div></div>`;
   }
 
@@ -367,26 +476,27 @@
       return `<section class="panel enter">${team ? `<span class="label">Ton équipe</span><h2>${esc(team.name)}</h2><p class="dim">${team.captain === me.id ? 'Tu es capitaine : c’est toi qui mises et réponds pour l’équipe.' : 'Ton capitaine mise et répond pour l’équipe.'}</p><p class="dim small">En attente du lancement par l’hôte…</p>`
         : `<h2>Choisis ton équipe</h2>${g ? '<p class="dim small">La partie a commencé : rejoins une équipe existante.</p>' : ''}`}
         ${L.teams.length ? `<div class="stack">${L.teams.map(t => `<button class="${team && team.name === t.name ? '' : 'ghost'}" data-a="joinTeam" data-v="${esc(t.name)}" ${team && team.name === t.name ? 'disabled' : ''} ${ui.busy ? 'disabled' : ''}>${esc(t.name)} · ${t.members.length} joueur${t.members.length > 1 ? 's' : ''}</button>`).join('')}</div>` : ''}
-        ${g ? '' : `<label>Nouvelle équipe<input id="teamName" maxlength="24" value="${val('teamName')}" placeholder="Les Renards" autocomplete="off"></label><button data-a="newTeam" ${ui.busy ? 'disabled' : ''}>Créer l’équipe</button>`}
+        ${g || team ? '' : (() => { const sug = ui.inputs.teamName ?? (ui.sug = ui.sug || freeName(L.teams.map(t => t.name))); return `<label>Nouvelle équipe<input id="teamName" maxlength="24" value="${esc(sug)}" autocomplete="off"></label><button data-a="newTeam" ${ui.busy ? 'disabled' : ''}>Créer l’équipe</button>`; })()}
         ${team && !g ? `<div class="row">${team.captain !== me.id ? `<button class="ghost mini" data-a="captain">Devenir capitaine</button>` : ''}<button class="ghost mini" data-a="leaveTeam">Quitter l’équipe</button></div>` : ''}
         ${err}</section>`;
     }
     const t = g.teams[mine], team = L.teams[mine], captain = team.captain === me.id, q = g.question;
     const capNote = captain ? '' : `<p class="dim small">C’est ${esc((team.members.find(m => m.id === team.captain) || {}).pseudo || 'ton capitaine')} qui joue pour l’équipe. <button class="ghost mini" data-a="captain">Prendre la main</button></p>`;
     let panel = '';
-    if (g.phase === 'tease') panel = `<span class="label">L’annonce · ${esc(q.category)}</span><div class="tease">${catImg(q.category)}<p class="big">${esc(q.tease)}</p></div><p class="dim">Discutez, provoquez-vous. L’hôte va ouvrir les enchères.</p>`;
+    if (g.phase === 'tease') panel = `<span class="label">L’annonce · ${esc(q.category)}</span><div class="tease">${catImg(q.category)}<p class="big">${esc(q.tease)}</p></div><p class="dim">Discutez, provoquez-vous. Les enchères vont s’ouvrir.</p>`;
     else if (g.phase === 'bet'){
       const ctx = g.street === 'pre' ? `<span class="label">Avant la question · ${esc(q.category)}</span><div class="tease small-tease">${catImg(q.category, 'catcard sm')}<p>${esc(q.tease)}</p></div>` : `<span class="label">Après les réponses</span><p><b>${esc(q.q)}</b></p>${myAnswerNote()}`;
       if (g.toAct === mine && captain) panel = ctx + betPanel(g);
-      else panel = ctx + `<h2>${g.toAct === mine ? 'À vous de parler' : `À ${esc(g.teams[g.toAct].name)} de parler`}</h2>${g.toAct === mine ? capNote : ''}`;
+      else panel = ctx + `<h2>${g.toAct === mine ? 'À vous de parler' : `Au tour de ${esc(g.teams[g.toAct].name)}`}</h2>${g.toAct === mine ? capNote : ''}`;
     } else if (g.phase === 'answers'){
       if (t.folded) panel = `<p class="big">${esc(q.q)}</p><p class="dim">Vous êtes couchés pour cette manche.</p>`;
       else if (t.answered) panel = `<span class="label">Réponse verrouillée</span>${qcard(q.q, 'sm')}${myAnswerNote()}<p class="dim small">En attente des autres équipes…</p>`;
       else if (captain) panel = answerPanel(g, mine);
       else panel = `<span class="label">Question</span>${qcard(q.q)}<p class="dim">Votre capitaine répond. Chuchotez-lui la réponse !</p>${capNote}`;
-    } else if (g.phase === 'result') panel = resultHtml(g) + `<p class="dim small">L’hôte lance la suite.</p>`;
+    } else if (g.phase === 'result') panel = resultHtml(g) + `<p class="dim small">${s.timer ? 'Manche suivante dans un instant…' : 'L’hôte lance la suite.'}</p>`;
     else if (g.phase === 'end') panel = endHtml(s);
-    return statusBar(g, `<span class="tag">${esc(team.name)} · ${chips(t.chips)}</span>`) + `<section class="panel ${g.toAct === mine ? 'hot' : ''} enter">${panel}${err}</section>` + seatsHtml(s);
+    const showChrono = s.timer && ((g.phase === 'bet' && g.toAct === mine) || (g.phase === 'answers' && !t.answered && !t.folded));
+    return statusBar(g, `<span class="tag">${esc(team.name)} · ${chips(t.chips)}</span>`) + (s.paused ? '<p class="notice small">Partie en pause.</p>' : '') + `<section class="panel ${g.toAct === mine ? 'hot' : ''} enter">${showChrono ? chronoBar(s.timer) : ''}${panel}${err}</section>` + seatsHtml(s);
   }
 
   function myAnswerNote(){
@@ -412,7 +522,7 @@
   }
 
   function answerPanel(g, mine){
-    const q = g.question, t = g.teams[mine], key = `${room.code}-${g.round}`;
+    const q = g.question, t = g.teams[mine], key = `${room ? room.code : 'solo'}-${g.round}-${mine}`;
     if (ui.ansFor !== key){ ui.ansFor = key; ui.answer = null; ui.greedy = false; ui.bonus = null; }
     const canGreed = g.greedMode && t.chips >= H.GREED_COST;
     const opts = (list, sel, a) => `<div class="stack">${list.map((x, j) => `<button class="choice" aria-pressed="${sel === j}" data-a="${a}" data-v="${j}">${'ABCD'[j]}. ${esc(x)}</button>`).join('')}</div>`;
@@ -429,7 +539,9 @@
     const el = e.target;
     if (el.id === 'greedy'){ ui.greedy = el.checked; render(); return; }
     if (el.id === 'roomClub'){ ui.inputs.roomClub = el.value; return; }
-    if (el.dataset.setting){ const k = el.dataset.setting; const v = k === 'greed' ? el.value === '1' : Number(el.value); hostDo(() => hostActions.setting(k, v)); }
+    if (el.id === 'soloRounds'){ ui.soloRounds = Number(el.value); return; }
+    if (el.id === 'soloGreed'){ ui.soloGreed = el.value === '1'; return; }
+    if (el.dataset.setting){ const k = el.dataset.setting; const v = k === 'greed' ? el.value === '1' : (k === 'pace' || k === 'club') ? el.value : Number(el.value); hostDo(() => hostActions.setting(k, v)); }
   });
   app.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
@@ -446,6 +558,7 @@
           const p = clean(inp('pseudo'), 24); if (!p){ ui.err = 'Choisis un pseudo.'; break; }
           await net.setPseudo(p); me.pseudo = p;
           if (ui.pendingRoom){ const c = ui.pendingRoom; ui.pendingRoom = null; await enterRoom(c); return; }
+          if (ui.pendingCreate){ ui.pendingCreate = false; await createTable(); return; }
           ui.view = room ? 'room' : 'home'; loadClubs(); break;
         }
         case 'editPseudo': ui.inputs.pseudo = me.pseudo; ui.view = 'pseudo'; break;
@@ -456,14 +569,35 @@
           try { await navigator.clipboard.writeText(text); } catch (e) {}
           ui.invited = v; break;
         }
-        case 'home': ui.view = 'home'; break;
-        case 'join': { const c = inp('joinCode').toUpperCase(); if (!/^[A-Z]{4}$/.test(c)){ ui.err = 'Le code fait 4 lettres.'; break; } await enterRoom(c); return; }
-        case 'create': {
-          const club = ui.inputs.roomClub || '';
-          const lobby = { teams: [], settings: { rounds: 8, startChips: 30, greed: true } };
-          const code = await net.createRoom({ v: 1, rev: 0, status: 'lobby', lobby, game: null, errors: {}, club: club || null }, club);
-          await enterRoom(code); return;
+        case 'home': ui.view = 'home'; ui.err = ''; setMode(null); break;
+        case 'rules': ui.view = 'rules'; window.scrollTo(0, 0); break;
+        case 'rejoin': if (!me.pseudo){ ui.pendingRoom = v; ui.view = 'pseudo'; break; } await enterRoom(v); return;
+        case 'shareRoom': {
+          const text = `On joue à HOLD UP! Rejoins la table : ${joinUrl(v)}`;
+          try { if (navigator.share){ await navigator.share({ title: 'HOLD UP!', text, url: joinUrl(v) }); break; } } catch (e) { if (e && e.name === 'AbortError') break; }
+          try { await navigator.clipboard.writeText(text); } catch (e) {}
+          ui.shared = true; break;
         }
+        case 'pause': hostDo(() => hostActions.pause()); return;
+        // un seul téléphone
+        case 'soloNew': ls.set('holdup-solo', null); solo = null; openSolo(); return;
+        case 'soloResume': openSolo(); return;
+        case 'soloAdd': ui.soloTeams = ui.soloTeams.map((n, i) => ui.inputs['soloTeam' + i] ?? n); ui.soloTeams.push(freeName(ui.soloTeams)); Object.keys(ui.inputs).filter(k => k.startsWith('soloTeam')).forEach(k => delete ui.inputs[k]); break;
+        case 'soloDel': ui.soloTeams = ui.soloTeams.map((n, i) => ui.inputs['soloTeam' + i] ?? n).filter((n, i) => i !== Number(v)); Object.keys(ui.inputs).filter(k => k.startsWith('soloTeam')).forEach(k => delete ui.inputs[k]); break;
+        case 'soloStart': {
+          const names = ui.soloTeams.map((n, i) => clean(ui.inputs['soloTeam' + i] ?? n, 24));
+          const rounds = Number((document.getElementById('soloRounds') || {}).value || 8), greed = (document.getElementById('soloGreed') || {}).value !== '0';
+          const g = H.createGame({ names, rounds, greed }); H.startRound(g);
+          solo = { g, history: [] }; saveSolo(); ui.view = 'solo'; Object.keys(ui.inputs).filter(k => k.startsWith('soloTeam')).forEach(k => delete ui.inputs[k]); break;
+        }
+        case 'soloOpen': soloDo(() => H.openStreet(solo.g)); return;
+        case 'soloNext': soloDo(() => H.startRound(solo.g)); return;
+        case 'soloReady': ui.soloReady = v; break;
+        case 'soloUndo': if (solo.history.length){ solo.g = JSON.parse(solo.history.pop()); saveSolo(); ui.soloReady = null; } break;
+        case 'soloAgain': { const names = solo.g.teams.map(t => t.name), g = H.createGame({ names, rounds: solo.g.rounds, greed: solo.g.greedMode }); H.startRound(g); solo = { g, history: [] }; saveSolo(); break; }
+        case 'soloQuit': solo = null; ui.view = 'home'; setMode(null); break;
+        case 'join': { const c = inp('joinCode').toUpperCase(); if (!/^[A-Z]{4}$/.test(c)){ ui.err = 'Le code fait 4 lettres.'; break; } if (!me.pseudo){ ui.pendingRoom = c; ui.view = 'pseudo'; break; } await enterRoom(c); return; }
+        case 'create': if (!me.pseudo){ ui.pendingCreate = true; ui.view = 'pseudo'; break; } await createTable(); return;
         case 'leave': leaveRoom(false); loadClubs(); return;
         case 'clubs': ui.view = 'clubs'; render(); await loadClubs(true); return;
         case 'joinClub': { const c = inp('clubCode').toUpperCase(); await net.joinClub(c); ui.inputs.clubCode = ''; await loadClubs(true); return; }
@@ -471,10 +605,10 @@
         case 'tab': ui.tab = v; break;
         // joueur
         case 'joinTeam': send({ type: 'join', team: v, pseudo: me.pseudo, avatar: myAvatar() }); return;
-        case 'newTeam': { const n = clean(inp('teamName'), 24); if (!n){ ui.err = 'Donne un nom d’équipe.'; break; } ui.inputs.teamName = ''; send({ type: 'join', team: n, pseudo: me.pseudo, avatar: myAvatar() }); return; }
+        case 'newTeam': { const n = clean(inp('teamName'), 24); if (!n){ ui.err = 'Donne un nom d’équipe.'; break; } delete ui.inputs.teamName; ui.sug = null; send({ type: 'join', team: n, pseudo: me.pseudo, avatar: myAvatar() }); return; }
         case 'leaveTeam': send({ type: 'leave' }); return;
         case 'captain': send({ type: 'captain' }); return;
-        case 'bet': send(v === 'raise' ? { type: 'bet', action: 'raise', to: ui.raiseTo } : { type: 'bet', action: v }); return;
+        case 'bet': if (ui.view === 'solo'){ soloDo(() => H.act(solo.g, v, ui.raiseTo)); return; } send(v === 'raise' ? { type: 'bet', action: 'raise', to: ui.raiseTo } : { type: 'bet', action: v }); return;
         case 'inc': ui.raiseTo++; break;
         case 'dec': ui.raiseTo--; break;
         case 'set': ui.raiseTo = Number(v); break;
@@ -482,6 +616,7 @@
         case 'pickb': ui.bonus = Number(v); break;
         case 'lock': {
           const a2 = { answer: ui.answer, greedy: !!ui.greedy, bonusAnswer: ui.greedy ? ui.bonus : null };
+          if (ui.view === 'solo'){ const seat = H.pendingAnswers(solo.g)[0]; ui.soloReady = null; soloDo(() => H.answerFor(solo.g, seat, a2)); return; }
           ls.set(ansKey(), a2); send({ type: 'answer', ...a2 }); return;
         }
         // hôte
@@ -492,6 +627,12 @@
     } catch (err){ ui.err = err.message || String(err); }
     render();
   });
+
+  async function createTable(){
+    const lobby = { teams: [], settings: { rounds: 8, startChips: 30, greed: true, pace: 'auto', club: '' } };
+    const code = await net.createRoom({ v: 1, rev: 0, status: 'lobby', lobby, game: null, errors: {}, club: null }, '');
+    await enterRoom(code);
+  }
 
   async function loadClubs(withResults){
     try {

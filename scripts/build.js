@@ -1,6 +1,6 @@
 // Construit dist/, le dossier à déposer sur Netlify :
 //   /            → jeu en ligne (nouvelle DA)
-//   /solo/       → version « un seul téléphone »
+//   /solo/       → redirige vers le mode un seul téléphone (/?mode=solo)
 //   /online/     → redirige vers / (anciens liens)
 // node scripts/build.js
 const fs = require('fs'), path = require('path');
@@ -20,10 +20,8 @@ const offPath = path.join(root, 'index.html');
 let off = fs.readFileSync(offPath, 'utf8');
 off = off.replace(/\/\*ENGINE-START\*\/[\s\S]*?\/\*ENGINE-END\*\//, () => `/*ENGINE-START*/\n${engine}\n/*ENGINE-END*/`);
 fs.writeFileSync(offPath, off);
-const head = off.slice(0, off.indexOf('</style>') + 8), body = off.slice(off.indexOf('<main id="app">'));
 fs.mkdirSync(path.join(dist, 'solo'));
-fs.writeFileSync(path.join(dist, 'solo', 'index.html'),
-  `<!doctype html>\n<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n${head}\n</head><body>\n${body}\n</body></html>\n`);
+fs.writeFileSync(path.join(dist, 'solo', 'index.html'), `<!doctype html><meta charset="utf-8"><title>HOLD UP!</title><script>location.replace('../?mode=solo')</script><a href="../?mode=solo">HOLD UP!</a>\n`);
 
 // 2. Jeu en ligne à la racine, avec numéro de version sur les fichiers (évite l'ancien cache)
 fs.cpSync(path.join(root, 'online'), dist, { recursive: true });

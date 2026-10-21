@@ -1,17 +1,24 @@
-# HOLD UP! — v3 (en ligne)
+# HOLD UP! — jeu de soirée
 
-Jeu de soirée compétitif : culture G, jetons fictifs et bluff. Aucun argent réel, aucun pari monétaire, aucun cash-out.
+Culture G, jetons fictifs et bluff, entre potes. Tout se passe sur téléphone : rien à imprimer, rien à installer (le site s'ajoute à l'écran d'accueil comme une app). Aucun argent réel, aucun pari monétaire, aucun cash-out.
 
-Deux façons de jouer :
-- **Un seul téléphone** (`dist/solo/`) : le téléphone circule autour de la table. Aucun serveur.
-- **En ligne** (racine de `dist/`) : un écran de table (télé, ordinateur ou téléphone de l'hôte) et un téléphone par équipe. Salons en temps réel par code à 4 lettres, pseudos invités sans compte, clubs avec classement.
+## Deux façons de jouer (accueil du site)
+- **Un seul téléphone** : on se le passe autour de la table. Écran « Passe le téléphone à l'équipe… » pour les réponses secrètes, annuler la dernière action, reprise automatique si l'appli se ferme. Fonctionne même sans connexion au serveur.
+- **Chacun son téléphone** : ton écran devient la table (QR code, lien à partager), chaque équipe joue sur son téléphone. Nom d'équipe proposé d'office, pseudo + avatar demandés seulement à ce moment-là.
+
+## Soirée sans prise de tête (mode en ligne)
+- **Rythme Auto** (par défaut) : l'annonce s'ouvre seule après 8 s, chaque équipe a 40 s pour miser (sinon elle passe si c'est gratuit, ou se couche) et 45 s pour répondre (sinon elle se couche), la manche suivante démarre 15 s après l'abattage. Chrono visible (barre du kit). Bouton **Pause** pour l'hôte.
+- **Rythme Libre** : l'hôte fait avancer à la main, pas de chrono.
+- L'écran reste allumé pendant la partie. « Revenir au salon » sur l'accueil si un téléphone se recharge.
+- « Comment jouer ? » : les règles en 4 cartes.
+- 63 questions avec question liée, tirées au hasard sans répétition dans une partie.
 
 ## Mise en ligne (10 minutes, gratuit)
 1. Crée un projet sur [supabase.com](https://supabase.com).
 2. **SQL Editor** → New query → colle `supabase/schema.sql` → Run.
 3. **Authentication → Sign In / Providers** → active **Allow anonymous sign-ins**.
 4. **Project Settings → API** : copie l'URL du projet et la clé `publishable` dans `dist/config.js`.
-5. Glisse le dossier `dist/` sur [app.netlify.com/drop](https://app.netlify.com/drop). Le jeu en ligne est à `https://<ton-site>/`, la version un téléphone à `/solo/`. Les anciens liens `/online/` redirigent vers la racine.
+5. Glisse le dossier `dist/` sur [app.netlify.com/drop](https://app.netlify.com/drop). Le jeu est à `https://<ton-site>/`. `/solo/` ouvre directement le mode un seul téléphone, les anciens liens `/online/` redirigent vers la racine.
 
 Sans configuration Supabase, la version en ligne tourne en **mode démo** : chaque onglet d'un même navigateur joue un téléphone (`?demo=1` force ce mode).
 
@@ -53,6 +60,7 @@ L'hôte peut aussi jouer depuis son appareil (onglet « Mon équipe »).
 ## Tests
 - `node tests/engine.test.js` : 23 tests du moteur, dont 400 parties aléatoires (total des jetons vérifié après chaque action).
 - `node tests/rls.test.mjs` (après `npm i @electric-sql/pglite`) : le schéma et toutes les règles d'accès dans un vrai Postgres embarqué.
+- `node tests/solo-timers.e2e.js` : mode un seul téléphone (préparation, annuler, réponses secrètes, reprise, conservation des jetons, même sans serveur) et chronos automatiques (ouverture, temps écoulé, manche suivante, pause).
 - `node tests/online.e2e.js` (après `npm i playwright` et `node scripts/build.js`) : une soirée complète à 4 onglets en mode démo. Club, lobby, capitaine et coéquipier, enchères, réponses secrètes, gourmandise, rechargement de l'hôte et d'un joueur, abandon forcé, fin de partie, classement.
 
 `node scripts/build.js` reconstruit `dist/` (réinjecte `engine.js` dans la version un téléphone, numérote les fichiers pour éviter l'ancien cache, garde la configuration Supabase déjà saisie dans `dist/config.js`).
@@ -61,9 +69,9 @@ L'hôte peut aussi jouer depuis son appareil (onglet « Mon équipe »).
 - Le temps réel Supabase n'a pas encore tourné contre un vrai projet : le code suit l'API de supabase-js 2.117.2, et le mode démo emprunte exactement le même chemin applicatif. Premier test à faire dès le projet créé.
 - L'hôte reçoit les réponses (il fait tourner le moteur). Si l'hôte joue aussi, il pourrait techniquement les lire dans les outils de développement du navigateur.
 - Si l'écran de la table est fermé, la partie se fige jusqu'à sa réouverture.
-- Pas de minuteur de tour pour l'instant (l'hôte couche les équipes absentes à la main).
+
 
 ## Suite possible
-- Étape 4 du plan initial : PWA (icône sur l'écran d'accueil, plein écran) et minuteur de tour.
+- Mode hors ligne complet (service worker) pour le mode un seul téléphone.
 - Étape 5 : schéma de questions (annonce, principale, liée, réponses, explications), plus de questions vérifiées.
 - Faire tourner le moteur dans une Edge Function Supabase pour que l'hôte n'ait plus accès aux réponses.

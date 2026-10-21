@@ -17,7 +17,7 @@ const server = http.createServer((req, res) => {
   const ctx = await browser.newContext({ viewport: { width: 400, height: 860 } });
   await ctx.route(/fonts\.googleapis|cdnjs/, r => r.abort());
   const errors = [];
-  const open = async name => { const p = await ctx.newPage(); p.on('pageerror', e => errors.push(name + ': ' + e.message)); await p.goto(base); await p.fill('#pseudo', name); await p.click('[data-a=savePseudo]'); await p.waitForSelector('[data-a=join]'); return p; };
+  const open = async name => { const p = await ctx.newPage(); p.on('pageerror', e => errors.push(name + ': ' + e.message)); await p.goto(base); await p.click('[data-a=editPseudo]'); await p.fill('#pseudo', name); await p.click('[data-a=savePseudo]'); await p.waitForSelector('[data-a=join]'); return p; };
   const click = (p, sel) => p.click(sel);
   const text = p => p.textContent('main');
   const waitText = (p, s, ms = 5000) => p.waitForFunction(t => document.querySelector('main').textContent.includes(t), s, { timeout: ms });
@@ -29,8 +29,9 @@ const server = http.createServer((req, res) => {
   const host = await open('Soul');
   await click(host, '[data-a=clubs]'); await host.fill('#clubName', 'Les Jeudis'); await click(host, '[data-a=createClub]');
   await waitText(host, 'Les Jeudis'); const clubCode = (await text(host)).match(/Code ([A-Z0-9]{6})/)[1]; ok('club créé ' + clubCode);
-  await click(host, '[data-a=home]'); await host.selectOption('#roomClub', clubCode); await click(host, '[data-a=create]');
+  await click(host, '[data-a=home]'); await click(host, '[data-a=create]');
   await host.waitForSelector('.roomcode'); const code = (await host.textContent('.roomcode')).trim(); ok('salon ' + code);
+  await host.selectOption('#setClub', clubCode); await host.selectOption('#setPace', 'libre');
 
   // Joueurs
   const a1 = await open('Alice'), a2 = await open('Amine'), b1 = await open('Bruno');

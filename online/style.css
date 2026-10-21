@@ -157,3 +157,24 @@ button.choice{border-color:var(--felt-line);background:rgba(255,255,255,.06)}
 .club-banner{display:block;width:100%;max-width:440px;height:auto;margin:0 auto;border-radius:14px}
 .rank-badge{height:34px;width:auto;display:block}
 .lb td{vertical-align:middle}
+
+/* ---------- Soirée facile ---------- */
+.modes{display:grid;gap:12px}
+.mode{display:grid;gap:4px;text-align:left;padding:18px 18px;min-height:96px;border-radius:16px;border:2px solid var(--gold);background:linear-gradient(180deg,#f8c75a,#e9a527);color:var(--gold-ink);box-shadow:0 5px 0 #8a5a12}
+.mode+.mode{background:linear-gradient(180deg,#3a63c9,#253f8e);border-color:#6f93ec;color:#fff;box-shadow:0 5px 0 #15265a}
+.mode:active:not(:disabled){transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.4)}
+.mode-t{font-family:var(--display);font-size:1.55rem;line-height:1.1}
+.mode-s{font-weight:700;font-size:.92rem;opacity:.9}
+.rule{grid-template-columns:auto 1fr;align-items:center;gap:14px}
+.rule-img{display:grid;place-items:center;width:110px}
+.rule p{color:var(--ink-dim)}
+.chrono{display:flex;align-items:center;gap:8px}
+.chrono img{height:30px;width:auto;object-fit:cover;object-position:left;width:22px;flex:0 0 auto}
+.chrono .track{flex:1;height:12px;border-radius:99px;background:rgba(0,0,0,.45);border:2px solid #8a5a12;overflow:hidden}
+.chrono .track i{display:block;height:100%;background:linear-gradient(90deg,#d6452f,#f6b93b);animation-name:drain;animation-timing-function:linear;animation-fill-mode:forwards}
+@keyframes drain{to{width:0}}
+.secret{text-align:center;display:grid;gap:12px;padding:12px 0}
+.secret .display{font-size:1.8rem;color:var(--gold);overflow-wrap:anywhere}
+input.code{min-width:0}
+.home-hero .logo{width:min(210px,60%)}
+.home-hero .hero-mascots{width:min(230px,62%)}
