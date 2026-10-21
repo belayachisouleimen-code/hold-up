@@ -37,7 +37,7 @@ L'hôte peut aussi jouer depuis son appareil (onglet « Mon équipe »).
 - Repris du kit 1 : la carte « Votre tour ! » et les mascottes de l'accueil (absentes du kit 2).
 - `scripts/slice-kit.py <planche.png> <dossier>` : refait le découpage (positions du kit 2).
 - Dans le jeu : choix d'un avatar avec le pseudo (affiché dans les équipes, le classement et le club), carte mystère quand une équipe gagne sans révéler, badges de rang dans le classement du club (Argent dès 2 victoires, Or 5, Platine 10, Diamant 15, Légende 25), bouton Inviter des amis (partage ou copie du code du club), bouton Quitter.
-- Non utilisés pour l'instant : « La réponse était… » (illustration propre à une question), barres de chrono (pas encore de minuteur), pastille d'équipe.
+- Non utilisés pour l'instant : « La réponse était… » (illustration propre à une question), pastille d'équipe. Le sablier sert au chrono, sa barre est redessinée en CSS.
 
 ## Architecture
 - `engine.js` : moteur de règles pur (source de vérité, partagé par les deux versions).
