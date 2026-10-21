@@ -1,7 +1,7 @@
 // HOLD UP! en ligne. L'hôte fait autorité : il reçoit les actions des téléphones, applique le moteur
 // de règles et publie une vue publique (sans les réponses) que tout le salon écoute en temps réel.
 (() => {
-  const H = window.HoldUp, net = window.HoldUpNet;
+  const H = window.HoldUp, net = window.HoldUpNet, BK = window.HoldUpBank;
   const app = document.getElementById('app');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const A = n => `assets/${n}.webp`;
@@ -306,14 +306,14 @@
   function homeView(){
     const last = ls.get('holdup-last-room'), soloSave = ls.get('holdup-solo');
     const resume = [
-      soloSave && soloSave.g && soloSave.g.phase !== 'end' ? `<button class="ghost" data-a="soloResume">Reprendre la partie sur ce téléphone (manche ${soloSave.g.round}/${soloSave.g.rounds})</button>` : '',
+      soloSave && soloSave.g && soloSave.g.phase !== 'end' ? `<button class="ghost" data-a="soloResume">Reprendre la partie sur ce téléphone (${soloSave.g.kind === 'bank' ? `duel ${soloSave.g.duelIdx + 1}/${soloSave.g.schedule.length}` : `manche ${soloSave.g.round}/${soloSave.g.rounds}`})</button>` : '',
       last ? `<button class="ghost" data-a="rejoin" data-v="${esc(last)}">Revenir au salon ${esc(last)}</button>` : ''
     ].join('');
     const off = me.offline ? `<p class="notice small">Le jeu en ligne est indisponible pour l’instant (${esc(ui.netError || 'connexion impossible')}). Le mode un seul téléphone marche quand même.</p>` : '';
     return header(true) + off + `<div class="hello">${avatar(myAvatar(), 'av md')}<p>${me.pseudo ? `Salut <b>${esc(me.pseudo)}</b>` : 'Bienvenue !'}</p><button class="ghost mini" data-a="editPseudo">${me.pseudo ? 'Profil' : 'Choisir mon pseudo'}</button></div>
       ${resume ? `<div class="stack">${resume}</div>` : ''}
       <div class="modes">
-        <button class="mode" data-a="soloNew"><span class="mode-t">Un seul téléphone</span><span class="mode-s">On se le passe autour de la table. Rien d’autre à installer.</span></button>
+        <button class="mode" data-a="soloNew"><span class="mode-t">Un seul téléphone</span><span class="mode-s">Mode Banque ou Poker. On se le passe autour de la table, rien d’autre à installer.</span></button>
         <button class="mode" data-a="create" ${me.offline ? 'disabled' : ''}><span class="mode-t">Chacun son téléphone</span><span class="mode-s">Ton écran devient la table, les équipes jouent sur leur téléphone.</span></button>
       </div>
       <section class="panel"><h2>Rejoindre une table</h2>
@@ -326,31 +326,42 @@
   function rulesView(){
     const step = (img, t, d) => `<section class="panel rule"><div class="rule-img">${img}</div><div><h2>${t}</h2><p>${d}</p></div></section>`;
     return `<button class="ghost mini" data-a="home">← Retour</button><img class="classement-head" src="${A('logo')}" alt="HOLD UP!" style="width:min(200px,60%)">
-      ${step(`<img src="${A('cat-histoire')}" alt="" class="catcard sm">`, '1. L’annonce', 'Un thème est annoncé, pas encore la question. Vous misez vos jetons fictifs si vous le sentez bien.')}
-      ${step(`<img src="${A('btn-relancer')}" alt="" style="width:100px">`, '2. Les mises', 'Comme au poker : suivre, relancer ou se coucher. Si tout le monde se couche, le dernier gagne sans montrer sa réponse.')}
-      ${step(`<img src="${A('card-question')}" alt="" style="width:110px">`, '3. La réponse secrète', 'Chaque équipe répond en cachette. Gourmandise : 3 jetons pour une question liée. Réussie, elle passe devant tout le monde.')}
-      ${step(`<img src="${A('card-bonne')}" alt="" style="width:90px">`, '4. L’abattage', 'Les bonnes réponses se partagent le pot. Personne n’a trouvé ? Jackpot pour la manche suivante. Le plus riche à la fin gagne.')}
+      <span class="label" style="text-align:center">Mode Banque · un seul téléphone</span>
+      ${step(`<img src="${A('cat-histoire')}" alt="" class="catcard sm">`, '1. Le duel', 'Une équipe tient la banque et le téléphone. Elle affronte chaque autre équipe à son tour. Le thème est annoncé, l’équipe qui joue mise ses jetons.')}
+      ${step(`<img src="${A('card-question')}" alt="" style="width:110px">`, '2. Le piège', 'La banque choisit la difficulté (facile ×1, moyen ×2, dur ×3), lit la question à voix haute et juge la réponse. Elle seule voit la bonne réponse.')}
+      ${step(`<img src="${A('card-bonne')}" alt="" style="width:90px">`, '3. Encore ?', 'Bonne réponse : on encaisse, ou on tente une autre question pour faire grimper le multiplicateur. Une erreur, et on perd tout.')}
+      ${step(`<img src="${A('card-mauvaise')}" alt="" style="width:90px">`, '4. Le vol', 'Raté ? La première autre équipe qui crie la bonne réponse vole la mise. Quand chacun a tenu la banque, le plus riche gagne.')}
+      <p class="dim small" style="text-align:center">Mode Poker : tout le monde répond en secret à la même question, puis on mise et on bluffe.</p>
       <button data-a="soloNew">C’est parti</button>`;
   }
 
   // ---------- mode un seul téléphone ----------
   function setMode(m){ const u = new URL(location.href); if (m) u.searchParams.set('mode', m); else u.searchParams.delete('mode'); history.replaceState(null, '', u); }
   function openSolo(){ setMode('solo'); const sv = ls.get('holdup-solo'); solo = sv && sv.g && sv.g.phase !== 'end' ? sv : null; ui.view = solo ? 'solo' : 'soloSetup'; if (!solo) initSoloSetup(); keepAwake(); render(); }
-  function initSoloSetup(){ const names = []; for (let i = 0; i < 3; i++) names.push(freeName(names)); ui.soloTeams = names; ui.soloRounds = ui.soloRounds || 8; ui.soloGreed = ui.soloGreed ?? true; }
+  function initSoloSetup(){ const names = []; for (let i = 0; i < 3; i++) names.push(freeName(names)); ui.soloTeams = names; ui.soloRounds = ui.soloRounds || 8; ui.soloGreed = ui.soloGreed ?? true; ui.soloKind = ui.soloKind || 'bank'; ui.soloTours = ui.soloTours || 0; }
+  const defaultTours = n => n <= 3 ? 2 : 1;
   const saveSolo = () => ls.set('holdup-solo', solo);
   function soloSetupView(){
     const t = ui.soloTeams;
     return `<button class="ghost mini" data-a="home">← Retour</button>
-      <section class="panel enter"><h2>Les équipes</h2><p class="dim small">Un téléphone pour toute la table. Changez les noms si vous voulez.</p>
+      <section class="panel enter"><h2>Le jeu</h2>
+        <div class="kinds" role="radiogroup" aria-label="Jeu">
+          <button class="kind" role="radio" aria-checked="${ui.soloKind === 'bank'}" data-a="soloKind" data-v="bank"><b>Banque</b><span>Une équipe pose la question, l’autre mise et répond à l’oral. Encore ou j’encaisse ?</span><em>Nouveau</em></button>
+          <button class="kind" role="radio" aria-checked="${ui.soloKind === 'poker'}" data-a="soloKind" data-v="poker"><b>Poker</b><span>Tout le monde répond en secret à la même question, puis on mise et on bluffe.</span></button>
+        </div></section>
+      <section class="panel"><h2>Les équipes</h2><p class="dim small">Un téléphone pour toute la table. Changez les noms si vous voulez.</p>
         <div class="stack">${t.map((n, i) => `<div class="row"><input id="soloTeam${i}" maxlength="24" value="${esc(ui.inputs['soloTeam' + i] ?? n)}" aria-label="Équipe ${i + 1}">${t.length > 2 ? `<button class="ghost fit" data-a="soloDel" data-v="${i}" aria-label="Retirer l’équipe">✕</button>` : ''}</div>`).join('')}</div>
         ${t.length < 6 ? `<button class="ghost" data-a="soloAdd">+ Ajouter une équipe</button>` : ''}
-        <div class="row"><label>Manches<select id="soloRounds">${[6, 8, 10, 12].map(n => `<option ${n === ui.soloRounds ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-        <label>Gourmandise<select id="soloGreed"><option value="1" ${ui.soloGreed ? 'selected' : ''}>Oui</option><option value="0" ${ui.soloGreed ? '' : 'selected'}>Non</option></select></label></div>
+        ${ui.soloKind === 'bank' ? (() => { const tours = ui.soloTours || defaultTours(t.length), duels = tours * t.length * (t.length - 1);
+          return `<label>Durée<select id="soloTours">${[1, 2, 3].map(n => `<option value="${n}" ${n === tours ? 'selected' : ''}>Chaque équipe tient la banque ${n === 1 ? 'une fois' : n + ' fois'}</option>`).join('')}</select></label><p class="dim small">${duels} duels, environ ${Math.round(duels * 1.5)} minutes.</p>`; })()
+        : `<div class="row"><label>Manches<select id="soloRounds">${[6, 8, 10, 12].map(n => `<option ${n === ui.soloRounds ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label>Gourmandise<select id="soloGreed"><option value="1" ${ui.soloGreed ? 'selected' : ''}>Oui</option><option value="0" ${ui.soloGreed ? '' : 'selected'}>Non</option></select></label></div>`}
         ${errBox(ui.err)}<button data-a="soloStart">Lancer la partie</button></section>`;
   }
   function soloState(){ return { game: solo.g, lobby: { teams: solo.g.teams.map(() => ({ members: [] })) } }; }
   function soloDo(fn){ solo.history = (solo.history || []).slice(-30); solo.history.push(JSON.stringify(solo.g)); ui.err = ''; try { fn(); } catch (e){ solo.history.pop(); if (e.rule) ui.err = e.message; else throw e; } saveSolo(); render(); window.scrollTo(0, 0); }
   function soloView(){
+    if (solo.g.kind === 'bank') return bankView();
     const g = solo.g, q = g.question, s = soloState();
     const undo = solo.history && solo.history.length && g.phase !== 'result' && g.phase !== 'end' ? `<button class="ghost mini" data-a="soloUndo">Annuler la dernière action</button>` : '';
     const top = `<div class="row topbar"><img class="fit logo-sm" src="${A('logo')}" alt="HOLD UP!"><span class="who-me"><span class="dim small">Un seul téléphone</span></span>${imgBtn('soloQuit', null, 'btn-quitter', 'Quitter la partie', 'style="width:92px;flex:0 0 auto"')}</div>`;
@@ -445,6 +456,60 @@
     const shared = g.final && g.final.jackpotShared.length ? `<p class="notice small">Jackpot non réclamé partagé : ${g.final.jackpotShared.map(x => `${esc(g.teams[x.seat].name)} +${x.amount}`).join(', ')}.</p>` : '';
     const club = s.club ? (s.clubErr ? `<p class="err">${esc(s.clubErr)}</p>` : '<p class="dim small">Résultat enregistré dans le club.</p>') : '';
     return `<img class="classement-head" src="${A('classement-head')}" alt="Classement"><h2 style="text-align:center">${esc(ranked[0].t.name)} gagne la table</h2><div>${ranked.map((x, k) => `<div class="rank"><span class="n">${k + 1}</span><span>${esc(x.t.name)}<span class="sub members">${(s.lobby.teams[x.i] || { members: [] }).members.map(m => member(m)).join('')}</span></span><span>${chips(x.t.chips)}</span></div>`).join('')}</div>${shared}${club}`;
+  }
+
+  // ---------- mode Banque (un seul téléphone) ----------
+  function bankView(){
+    const g = solo.g, du = g.duel, T = i => esc(g.teams[i].name);
+    const top = `<div class="row topbar"><img class="fit logo-sm" src="${A('logo')}" alt="HOLD UP!"><span class="who-me"><span class="dim small">Mode Banque</span></span>${imgBtn('soloQuit', null, 'btn-quitter', 'Quitter la partie', 'style="width:92px;flex:0 0 auto"')}</div>`;
+    const undo = solo.history && solo.history.length && g.phase !== 'end' ? `<button class="ghost mini" data-a="soloUndo">Annuler la dernière action</button>` : '';
+    if (g.phase === 'end'){
+      const r = BK.ranking(g);
+      return top + `<section class="panel hot enter"><img class="classement-head" src="${A('classement-head')}" alt="Classement"><h2 style="text-align:center">${esc(r[0].name)} fait sauter la banque !</h2><div>${r.map((t, k) => `<div class="rank"><span class="n">${k + 1}</span><span>${esc(t.name)}</span><span>${chips(t.chips)}</span></div>`).join('')}</div><button data-a="soloAgain">Rejouer</button><button class="ghost" data-a="home">Accueil</button></section>`;
+    }
+    const status = `<div class="status"><span class="tag gold">Duel ${g.duelIdx + 1}/${g.schedule.length}</span><span class="tag">${esc(du.category)}</span>${du.stake ? `<span class="pot"><img src="${A('coins')}" alt="Mise">${du.stake}${du.mult ? ` ×${du.mult}` : ''}</span>` : ''}</div>`;
+    const vs = `<div class="vs"><div><span class="label">Banque</span><b>${T(du.bank)}</b><span class="dim small">${chips(g.teams[du.bank].chips)}</span></div><span class="vs-x">contre</span><div><span class="label">Joue</span><b>${T(du.player)}</b><span class="dim small">${chips(g.teams[du.player].chips)}</span></div></div>`;
+    let panel = '';
+    if (g.phase === 'bet'){
+      const max = BK.maxStake(g); ui.bankBet = Math.max(1, Math.min(max, ui.bankBet || Math.min(3, max)));
+      panel = `<div class="tease">${catImg(du.category)}<div><span class="label">Thème</span><p class="big">${esc(du.category)}</p></div></div>
+        <h2>${T(du.player)}, combien vous misez ?</h2><p class="dim small">Entre 1 et ${max}. La banque choisira ensuite la difficulté.</p>
+        <div class="stepper"><button class="ghost" data-a="bankDec" aria-label="Moins">−</button><output>${ui.bankBet}</output><button class="ghost" data-a="bankInc" aria-label="Plus">+</button></div>
+        <div class="presets">${[[1, 'chip-1'], [5, 'chip-5'], [10, 'chip-10']].filter(([v]) => v <= max).map(([v, img]) => imgBtn('bankSet', v, img, 'Miser ' + v)).join('')}${imgBtn('bankSet', max, 'btn-allin', 'Tout miser : ' + max)}</div>
+        ${imgBtn('bankBet', null, 'btn-miser', 'Miser ' + ui.bankBet, 'style="max-width:220px;justify-self:center"', ui.bankBet)}`;
+    } else if (g.phase === 'difficulty'){
+      const n = du.asked.length + 1;
+      panel = `<span class="label">${n === 1 ? 'Le piège' : `Question ${n} sur ${BK.MAX_QUESTIONS}`}</span><h2>${T(du.bank)}, choisis la difficulté</h2>
+        <p class="dim small">Plus c’est dur, plus ${T(du.player)} risque de se planter… mais plus tu paies s’il trouve.</p>
+        <div class="diffs">${[1, 2, 3].map(d => `<button class="diff d${d}" data-a="bankDiff" data-v="${d}"><b>${BK.DIFF[d]}</b><span>+${d} au multiplicateur</span><em>gain possible : ${du.stake * BK.nextMultiplier(g, d)}</em></button>`).join('')}</div>`;
+    } else if (g.phase === 'question'){
+      const q = BK.question(g);
+      panel = `<span class="label">${T(du.bank)} lit la question à voix haute · ${BK.DIFF[q.d]}</span>${qcard(q.q)}
+        <details class="reveal"><summary>Voir la réponse (banque seulement)</summary><p class="answer">${esc(q.a)}</p></details>
+        <p class="dim small" style="text-align:center">${T(du.player)} répond à l’oral. Si bonne réponse : ${du.stake} × ${du.mult + q.d} = <b>${du.stake * (du.mult + q.d)}</b> jetons en jeu.</p>
+        <div class="judge"><button class="ok-btn" data-a="bankJudge" data-v="1">✓ Bonne réponse</button><button class="ko-btn" data-a="bankJudge" data-v="0">✗ Mauvaise réponse</button></div>`;
+    } else if (g.phase === 'encore'){
+      const gain = du.stake * du.mult;
+      panel = `<span class="label">Bonne réponse !</span><h2>${T(du.player)}, vous avez ${gain} jetons en jeu</h2>
+        <p class="dim small">Vous encaissez, ou vous tentez une question de plus pour faire grimper le multiplicateur (×${du.mult} actuellement). Une erreur, et vous perdez votre mise et tout le reste.</p>
+        <div class="judge"><button data-a="bankEncore" data-v="0">Encaisser ${gain}</button><button class="ko-btn" data-a="bankEncore" data-v="1">Encore !</button></div>`;
+    } else if (g.phase === 'steal'){
+      const q = BK.question(g), others = g.teams.map((t, i) => i).filter(i => i !== du.bank && i !== du.player);
+      panel = `<span class="label">Raté !</span><p>La réponse était : <b>${esc(q.a)}</b></p>
+        ${others.length ? `<h2>Une autre équipe a crié la bonne réponse en premier ?</h2><p class="dim small">Elle vole les ${du.stake} jetons de mise.</p>
+        <div class="stack">${others.map(i => `<button class="ghost" data-a="bankSteal" data-v="${i}">${T(i)} a volé !</button>`).join('')}</div>` : ''}
+        <button data-a="bankSteal" data-v="">${others.length ? 'Non, la banque empoche' : 'La banque empoche la mise'}</button>`;
+    } else if (g.phase === 'result'){
+      const o = du.outcome, nx = g.schedule[g.duelIdx + 1];
+      const line = (i, v, note = '') => `<div class="delta"><span>${T(i)}</span><b class="${v >= 0 ? 'ok' : 'ko'}">${v >= 0 ? '+' : '−'}${Math.abs(v)}</b>${note ? `<em>${note}</em>` : ''}</div>`;
+      const title = o.type === 'win' ? 'Encaissé !' : o.type === 'stolen' ? 'Volé !' : 'La banque empoche';
+      const txt = `<h2>${title}</h2>` + (o.type === 'win' ? line(du.player, o.amount) + line(du.bank, -o.amount, o.amount < o.wanted ? `banque à sec, ${o.wanted} étaient dus` : '')
+        : o.type === 'stolen' ? line(o.to, o.amount, 'vol') + line(du.player, -o.amount) : line(du.bank, o.amount) + line(du.player, -o.amount));
+      const pass = nx && nx.bank !== du.bank ? `<p class="notice">Nouvelle banque : passez le téléphone à <b>${T(nx.bank)}</b>.</p>` : '';
+      panel = `<span class="label">Fin du duel</span>${txt}${pass}<button data-a="bankNext">${nx ? `Duel suivant : ${T(nx.player)}` : 'Classement final'}</button>`;
+    }
+    const seats = `<div class="seats">${g.teams.map((t, i) => `<div class="seat ${i === du.player ? 'turn' : ''}"><span class="nm">${esc(t.name)}</span><span class="st">${chips(t.chips)}</span><div class="meta">${i === du.bank ? '<span class="tag gold">Banque</span>' : ''}${i === du.player ? '<span class="tag">Joue</span>' : ''}${t.chips <= 0 ? '<span class="tag red">À sec</span>' : ''}</div></div>`).join('')}</div>`;
+    return top + status + `<section class="panel hot enter">${g.phase === 'bet' || g.phase === 'result' ? vs : ''}${panel}${errBox(ui.err)}${undo}</section>` + seats;
   }
 
   function hostView(s){
@@ -568,6 +633,7 @@
     if (el.id === 'photo' && el.files && el.files[0]){ photoToAvatar(el.files[0]).then(v => { ls.set('holdup-avatar', v); ui.err = ''; render(); }).catch(e => { ui.err = e.message || 'Photo illisible.'; render(); }); return; }
     if (el.id === 'roomClub'){ ui.inputs.roomClub = el.value; return; }
     if (el.id === 'soloRounds'){ ui.soloRounds = Number(el.value); return; }
+    if (el.id === 'soloTours'){ ui.soloTours = Number(el.value); render(); return; }
     if (el.id === 'soloGreed'){ ui.soloGreed = el.value === '1'; return; }
     if (el.dataset.setting){ const k = el.dataset.setting; const v = k === 'greed' ? el.value === '1' : (k === 'pace' || k === 'club') ? el.value : Number(el.value); hostDo(() => hostActions.setting(k, v)); }
   });
@@ -612,8 +678,13 @@
         case 'soloResume': openSolo(); return;
         case 'soloAdd': ui.soloTeams = ui.soloTeams.map((n, i) => ui.inputs['soloTeam' + i] ?? n); ui.soloTeams.push(freeName(ui.soloTeams)); Object.keys(ui.inputs).filter(k => k.startsWith('soloTeam')).forEach(k => delete ui.inputs[k]); break;
         case 'soloDel': ui.soloTeams = ui.soloTeams.map((n, i) => ui.inputs['soloTeam' + i] ?? n).filter((n, i) => i !== Number(v)); Object.keys(ui.inputs).filter(k => k.startsWith('soloTeam')).forEach(k => delete ui.inputs[k]); break;
+        case 'soloKind': ui.soloKind = v; break;
         case 'soloStart': {
           const names = ui.soloTeams.map((n, i) => clean(ui.inputs['soloTeam' + i] ?? n, 24));
+          if (ui.soloKind === 'bank'){
+            const g = BK.createGame({ names, tours: ui.soloTours || defaultTours(names.length), questions: window.HoldUpOpenQuestions });
+            solo = { g, history: [] }; saveSolo(); ui.view = 'solo'; ui.bankBet = 0; Object.keys(ui.inputs).filter(k => k.startsWith('soloTeam')).forEach(k => delete ui.inputs[k]); break;
+          }
           const rounds = Number((document.getElementById('soloRounds') || {}).value || 8), greed = (document.getElementById('soloGreed') || {}).value !== '0';
           const g = H.createGame({ names, rounds, greed }); H.startRound(g);
           solo = { g, history: [] }; saveSolo(); ui.view = 'solo'; Object.keys(ui.inputs).filter(k => k.startsWith('soloTeam')).forEach(k => delete ui.inputs[k]); break;
@@ -622,7 +693,20 @@
         case 'soloNext': soloDo(() => H.startRound(solo.g)); return;
         case 'soloReady': ui.soloReady = v; break;
         case 'soloUndo': if (solo.history.length){ solo.g = JSON.parse(solo.history.pop()); saveSolo(); ui.soloReady = null; } break;
-        case 'soloAgain': { const names = solo.g.teams.map(t => t.name), g = H.createGame({ names, rounds: solo.g.rounds, greed: solo.g.greedMode }); H.startRound(g); solo = { g, history: [] }; saveSolo(); break; }
+        case 'soloAgain': {
+          const names = solo.g.teams.map(t => t.name);
+          if (solo.g.kind === 'bank'){ solo = { g: BK.createGame({ names, tours: solo.g.tours, questions: window.HoldUpOpenQuestions }), history: [] }; saveSolo(); break; }
+          const g = H.createGame({ names, rounds: solo.g.rounds, greed: solo.g.greedMode }); H.startRound(g); solo = { g, history: [] }; saveSolo(); break;
+        }
+        case 'bankInc': ui.bankBet++; break;
+        case 'bankDec': ui.bankBet--; break;
+        case 'bankSet': ui.bankBet = Number(v); break;
+        case 'bankBet': soloDo(() => BK.bet(solo.g, ui.bankBet)); return;
+        case 'bankDiff': soloDo(() => BK.chooseDifficulty(solo.g, Number(v))); return;
+        case 'bankJudge': soloDo(() => BK.judge(solo.g, v === '1')); overlay(v === '1' ? 'card-bonne' : 'card-mauvaise', v === '1' ? 'Bonne réponse' : 'Mauvaise réponse'); return;
+        case 'bankEncore': soloDo(() => BK.encore(solo.g, v === '1')); return;
+        case 'bankSteal': soloDo(() => BK.steal(solo.g, v === '' ? null : Number(v))); return;
+        case 'bankNext': ui.bankBet = 0; soloDo(() => BK.next(solo.g)); return;
         case 'soloQuit': solo = null; ui.view = 'home'; setMode(null); break;
         case 'join': { const c = inp('joinCode').toUpperCase(); if (!/^[A-Z]{4}$/.test(c)){ ui.err = 'Le code fait 4 lettres.'; break; } if (!me.pseudo){ ui.pendingRoom = c; ui.view = 'pseudo'; break; } await enterRoom(c); return; }
         case 'create': if (!me.pseudo){ ui.pendingCreate = true; ui.view = 'pseudo'; break; } await createTable(); return;

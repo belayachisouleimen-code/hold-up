@@ -23,7 +23,7 @@ const server = http.createServer((req, res) => {
   const p = await ctx.newPage(); p.on('pageerror', e => errors.push('solo: ' + e.message));
   await p.goto(base + 'solo/?demo=1'); await p.waitForSelector('[data-a=soloStart]'); ok('/solo/ ouvre la préparation');
   assert.strictEqual(await p.locator('input[id^=soloTeam]').count(), 3); await p.click('[data-a=soloAdd]'); assert.strictEqual(await p.locator('input[id^=soloTeam]').count(), 4);
-  await p.click('[data-a=soloDel][data-v="3"]'); await p.fill('#soloTeam0', 'Les Champions'); await p.click('[data-a=soloStart]');
+  await p.click('[data-a=soloDel][data-v="3"]'); await p.fill('#soloTeam0', 'Les Champions'); await p.click('[data-a=soloKind][data-v=poker]'); await p.click('[data-a=soloStart]');
   await waitText(p, 'Ouvrir les enchères'); ok('partie lancée avec 3 équipes nommées');
   await p.click('[data-a=soloOpen]'); await waitText(p, 'Au tour de');
   const before = await p.textContent('main'); await p.click('[data-a=bet][data-v=call]'); await p.click('[data-a=soloUndo]');

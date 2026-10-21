@@ -25,10 +25,10 @@ fs.writeFileSync(path.join(dist, 'solo', 'index.html'), `<!doctype html><meta ch
 
 // 2. Jeu en ligne à la racine, avec numéro de version sur les fichiers (évite l'ancien cache)
 fs.cpSync(path.join(root, 'online'), dist, { recursive: true });
-fs.copyFileSync(path.join(root, 'engine.js'), path.join(dist, 'engine.js'));
+for (const f of ['engine.js', 'bank.js', 'questions-open.js']) fs.copyFileSync(path.join(root, f), path.join(dist, f));
 if (keptCfg) fs.writeFileSync(path.join(dist, 'config.js'), keptCfg);
 const idx = path.join(dist, 'index.html');
-fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/(href|src)="((?:style\.css|app\.js|net\.js|engine\.js|config\.js))"/g, `$1="$2?v=${version}"`));
+fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/(href|src)="((?:style\.css|app\.js|net\.js|engine\.js|bank\.js|questions-open\.js|config\.js))"/g, `$1="$2?v=${version}"`));
 
 // 3. Anciens liens /online/ → /
 fs.mkdirSync(path.join(dist, 'online'));

@@ -2,6 +2,16 @@
 
 Culture G, jetons fictifs et bluff, entre potes. Tout se passe sur téléphone : rien à imprimer, rien à installer (le site s'ajoute à l'écran d'accueil comme une app). Aucun argent réel, aucun pari monétaire, aucun cash-out.
 
+## Mode Banque (nouveau, un seul téléphone, par défaut)
+Inspiré du blackjack, pensé pour jouer ensemble dans la même pièce : l'app est le croupier, tout se passe à l'oral.
+1. **Le duel** : une équipe tient la banque et le téléphone, elle affronte chaque autre équipe à son tour. Le thème est annoncé, l'équipe qui joue mise (1 à 10 jetons).
+2. **Le piège** : la banque choisit la difficulté (facile ×1, moyen ×2, dur ×3), lit la question à voix haute ; elle seule peut afficher la réponse.
+3. **Encore ?** : bonne réponse → encaisser (mise × multiplicateur, payés par la banque) ou tenter une autre question, dont la difficulté s'ajoute au multiplicateur (3 questions maximum). Une erreur → tout est perdu.
+4. **Le vol** : en cas d'erreur, la première autre équipe qui crie la bonne réponse vole la mise ; sinon la banque l'empoche.
+- Durée : chaque équipe tient la banque 1, 2 ou 3 fois (12 duels pour 3 équipes en 2 tours, environ 18 minutes). Banque à sec : elle paie ce qu'elle a. Une équipe à 0 ne mise plus mais peut voler pour revenir.
+- `bank.js` (moteur), `questions-open.js` : 198 questions ouvertes à réponse courte, 8 catégories × 3 difficultés, relues par un vérificateur indépendant.
+- Le mode **Poker** (réponses secrètes, mises et bluff) reste disponible au choix.
+
 ## Deux façons de jouer (accueil du site)
 - **Un seul téléphone** : on se le passe autour de la table. Écran « Passe le téléphone à l'équipe… » pour les réponses secrètes, annuler la dernière action, reprise automatique si l'appli se ferme. Fonctionne même sans connexion au serveur.
 - **Chacun son téléphone** : ton écran devient la table (QR code, lien à partager), chaque équipe joue sur son téléphone. Nom d'équipe proposé d'office, pseudo + avatar demandés seulement à ce moment-là.
@@ -61,6 +71,8 @@ L'hôte peut aussi jouer depuis son appareil (onglet « Mon équipe »).
 ## Tests
 - `node tests/engine.test.js` : 23 tests du moteur, dont 400 parties aléatoires (total des jetons vérifié après chaque action).
 - `node tests/rls.test.mjs` (après `npm i @electric-sql/pglite`) : le schéma et toutes les règles d'accès dans un vrai Postgres embarqué.
+- `node tests/bank.test.js` : 11 tests du moteur Banque, dont 500 parties aléatoires (jetons conservés, jamais négatifs).
+- `node tests/bank.e2e.js` : une partie Banque complète à l'écran (mise, difficulté, réponse cachée, encore, vol, annuler, reprise, classement).
 - `node tests/solo-timers.e2e.js` : mode un seul téléphone (préparation, annuler, réponses secrètes, reprise, conservation des jetons, même sans serveur) et chronos automatiques (ouverture, temps écoulé, manche suivante, pause).
 - `node tests/online.e2e.js` (après `npm i playwright` et `node scripts/build.js`) : une soirée complète à 4 onglets en mode démo. Club, lobby, capitaine et coéquipier, enchères, réponses secrètes, gourmandise, rechargement de l'hôte et d'un joueur, abandon forcé, fin de partie, classement.
 
