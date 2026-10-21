@@ -11,6 +11,12 @@
   const catImg = (c, cls = 'catcard') => `<img class="${cls}" src="${A('cat-' + (CAT[c] || 'mystere'))}" alt="${esc(c)}">`;
   const qcard = (text, cls = '') => `<div class="qcard ${cls}"><p>${esc(text)}</p></div>`;
   const crown = `<img class="mini-ico" src="${A('coin-crown')}" alt="capitaine" title="Capitaine">`;
+  const AVATARS = 6;
+  const myAvatar = () => { let v = Number(ls.get('holdup-avatar')); if (!(v >= 1 && v <= AVATARS)){ v = 1 + Math.floor(Math.random() * AVATARS); ls.set('holdup-avatar', v); } return v; };
+  const avatar = (n, cls = 'av') => `<img class="${cls}" src="${A('avatar-' + (n >= 1 && n <= AVATARS ? n : 1))}" alt="">`;
+  const member = (m, captainId) => `<span class="member">${avatar(m.avatar)}${m.id === captainId ? crown : ''}${esc(m.pseudo)}</span>`;
+  const RANKS = [[25, 'legende', 'Légende'], [15, 'diamant', 'Diamant'], [10, 'platine', 'Platine'], [5, 'or', 'Or'], [2, 'argent', 'Argent'], [0, 'bronze', 'Bronze']];
+  const rankOf = wins => RANKS.find(([min]) => wins >= min);
   const imgBtn = (a, v, img, label, extra = '', amt = '') => `<button class="imgbtn" data-a="${a}" ${v !== null ? `data-v="${v}"` : ''} aria-label="${esc(label)}" ${extra}><img src="${A(img)}" alt="">${amt !== '' ? `<span class="amt">${amt}</span>` : ''}</button>`;
   const clean = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
   const rule = m => { const e = new Error(m); e.rule = true; return e; };
@@ -102,15 +108,15 @@
     const id = row.user_id, p = row.payload || {}, L = priv.lobby, g = priv.g;
     try {
       if (p.type === 'join'){
-        const pseudo = clean(p.pseudo, 24) || 'Invité', name = clean(p.team, 24);
+        const pseudo = clean(p.pseudo, 24) || 'Invité', name = clean(p.team, 24), av = Number.isInteger(p.avatar) && p.avatar >= 1 && p.avatar <= 6 ? p.avatar : 1;
         if (!name) throw rule('Donne un nom d’équipe.');
         const findTeam = () => L.teams.findIndex(t => t.name.toLowerCase() === name.toLowerCase());
         const cur = teamIdxOf(id);
         if (findTeam() < 0 && g) throw rule('La partie a commencé : rejoins une équipe existante.');
         if (cur >= 0 && cur !== findTeam()){ if (g) throw rule('Pas de changement d’équipe en cours de partie.'); removeMember(id); }
         const ti = findTeam();
-        if (ti < 0){ if (L.teams.length >= 6) throw rule('6 équipes maximum.'); L.teams.push({ name, captain: id, members: [{ id, pseudo }] }); }
-        else { const t = L.teams[ti], m = t.members.find(x => x.id === id); if (m) m.pseudo = pseudo; else t.members.push({ id, pseudo }); if (!t.captain) t.captain = id; }
+        if (ti < 0){ if (L.teams.length >= 6) throw rule('6 équipes maximum.'); L.teams.push({ name, captain: id, members: [{ id, pseudo, avatar: av }] }); }
+        else { const t = L.teams[ti], m = t.members.find(x => x.id === id); if (m){ m.pseudo = pseudo; m.avatar = av; } else t.members.push({ id, pseudo, avatar: av }); if (!t.captain) t.captain = id; }
       } else if (p.type === 'leave'){
         if (g) throw rule('Impossible de quitter son équipe en cours de partie.');
         removeMember(id);
@@ -138,7 +144,7 @@
     const order = g.teams.map((t, i) => i).sort((a, b) => g.teams[b].chips - g.teams[a].chips);
     let rank = 0, last = null;
     return order.map((i, k) => { const t = g.teams[i]; if (t.chips !== last){ rank = k + 1; last = t.chips; }
-      return { team: t.name, chips: t.chips, rank, players: (priv.lobby.teams[i] || { members: [] }).members.map(m => ({ id: m.id, pseudo: m.pseudo })) }; });
+      return { team: t.name, chips: t.chips, rank, players: (priv.lobby.teams[i] || { members: [] }).members.map(m => ({ id: m.id, pseudo: m.pseudo, avatar: m.avatar })) }; });
   }
   async function recordClub(){
     if (!room.club_code || priv.recorded) return;
@@ -214,14 +220,16 @@
   const header = (hero = false) => `<header class="brand"><img class="logo" src="${A('logo')}" alt="HOLD UP! Mise sur ton savoir">${hero ? `<img class="hero-mascots" src="${A('mascots')}" alt="">` : ''}</header>`;
 
   function pseudoView(){
-    return header() + `<section class="panel"><h2>Ton pseudo</h2><p class="dim">Pas de compte : ton pseudo reste sur cet appareil.</p>
+    const cur = myAvatar();
+    return header() + `<section class="panel"><h2>Ton profil</h2><p class="dim">Pas de compte : ton pseudo et ton avatar restent sur cet appareil.</p>
+      <span class="label">Avatar</span><div class="avatars" role="radiogroup" aria-label="Avatar">${Array.from({ length: AVATARS }, (_, i) => `<button class="avpick" role="radio" aria-checked="${cur === i + 1}" aria-label="Avatar ${i + 1}" data-a="avatar" data-v="${i + 1}">${avatar(i + 1, 'av lg')}</button>`).join('')}</div>
       <label>Pseudo<input id="pseudo" maxlength="24" value="${val('pseudo', me.pseudo)}" autocomplete="nickname"></label>${errBox(ui.err)}
       <button data-a="savePseudo">Continuer</button></section>`;
   }
 
   function homeView(){
     const clubs = clubsCache || [];
-    return header(true) + `<p class="dim">Salut <b>${esc(me.pseudo)}</b> · <button class="ghost mini" data-a="editPseudo">Changer de pseudo</button></p>
+    return header(true) + `<div class="hello">${avatar(myAvatar(), 'av md')}<p>Salut <b>${esc(me.pseudo)}</b></p><button class="ghost mini" data-a="editPseudo">Modifier mon profil</button></div>
       <section class="panel"><h2>Rejoindre une table</h2>
         <label>Code du salon<input id="joinCode" class="code" maxlength="4" value="${val('joinCode')}" autocomplete="off" autocapitalize="characters"></label>
         <button data-a="join">Rejoindre</button></section>
@@ -239,15 +247,17 @@
       if (!rows) return '<p class="dim small">Chargement du classement…</p>';
       if (!rows.length) return '<p class="dim small">Aucune soirée jouée pour l’instant. Créez une table en choisissant ce club.</p>';
       const by = {};
-      rows.forEach(r => (r.ranking || []).forEach(t => (t.players || []).forEach(p => {
-        const x = by[p.id] || (by[p.id] = { pseudo: p.pseudo, games: 0, wins: 0, podiums: 0, chips: 0 });
+      rows.slice().reverse().forEach(r => (r.ranking || []).forEach(t => (t.players || []).forEach(p => {
+        const x = by[p.id] || (by[p.id] = { games: 0, wins: 0, podiums: 0, chips: 0 });
+        x.pseudo = p.pseudo; x.avatar = p.avatar; // le plus récent
         x.games++; if (t.rank === 1) x.wins++; if (t.rank <= 3) x.podiums++; x.chips += t.chips;
       })));
       const lines = Object.values(by).sort((a, b) => b.wins - a.wins || b.podiums - a.podiums || b.chips - a.chips).slice(0, 30);
-      return `<div class="scroll"><table class="lb"><thead><tr><th>Joueur</th><th>Victoires</th><th>Podiums</th><th>Soirées</th></tr></thead><tbody>${lines.map(l => `<tr><td>${esc(l.pseudo)}</td><td class="n">${l.wins}</td><td class="n">${l.podiums}</td><td class="n">${l.games}</td></tr>`).join('')}</tbody></table></div><p class="dim small">${rows.length} soirée${rows.length > 1 ? 's' : ''} enregistrée${rows.length > 1 ? 's' : ''}.</p>`;
+      const row = l => { const r = rankOf(l.wins); return `<tr><td><span class="member">${avatar(l.avatar)}${esc(l.pseudo)}</span></td><td><img class="rank-badge" src="${A('rank-' + r[1])}" alt="${r[2]}" title="${r[2]}"></td><td class="n">${l.wins}</td><td class="n">${l.podiums}</td><td class="n">${l.games}</td></tr>`; };
+      return `<img class="classement-head" src="${A('classement-head')}" alt="Classement"><div class="scroll"><table class="lb"><thead><tr><th>Joueur</th><th>Rang</th><th>Victoires</th><th>Podiums</th><th>Soirées</th></tr></thead><tbody>${lines.map(row).join('')}</tbody></table></div><p class="dim small">${rows.length} soirée${rows.length > 1 ? 's' : ''} enregistrée${rows.length > 1 ? 's' : ''}. Rangs : Argent dès 2 victoires, Or 5, Platine 10, Diamant 15, Légende 25.</p>`;
     };
-    return header() + `<button class="ghost mini" data-a="home">← Retour</button>
-      ${list === null ? '<p class="dim">Chargement…</p>' : list.length ? list.map(c => `<section class="panel"><span class="label">Code ${esc(c.code)}</span><h2>${esc(c.name)}</h2>${board(c)}</section>`).join('') : '<p class="dim">Tu n’es dans aucun club.</p>'}
+    return `<button class="ghost mini" data-a="home">← Retour</button><img class="club-banner" src="${A('club-banner')}" alt="Mon club">
+      ${list === null ? '<p class="dim">Chargement…</p>' : list.length ? list.map(c => `<section class="panel"><span class="label">Code ${esc(c.code)}</span><h2>${esc(c.name)}</h2>${imgBtn('invite', c.code, 'btn-inviter', 'Inviter des amis', 'style="max-width:260px"')}${ui.invited === c.code ? `<p class="notice small">Code copié : <b>${esc(c.code)}</b>. Tes amis le saisissent dans « Rejoindre un club ».</p>` : ''}${board(c)}</section>`).join('') : '<p class="dim">Tu n’es dans aucun club.</p>'}
       ${errBox(ui.err)}
       <section class="panel"><h2>Rejoindre un club</h2><label>Code du club<input id="clubCode" class="code" maxlength="6" value="${val('clubCode')}" autocomplete="off"></label><button data-a="joinClub">Rejoindre</button></section>
       <section class="panel"><h2>Créer un club</h2><label>Nom<input id="clubName" maxlength="40" value="${val('clubName')}" placeholder="Les jeudis de la coloc"></label><button data-a="createClub">Créer</button></section>`;
@@ -257,7 +267,7 @@
     const s = room.state;
     const tabs = isHost ? `<div class="tabs" role="tablist"><button role="tab" aria-selected="${ui.tab === 'table'}" data-a="tab" data-v="table">Écran de la table</button><button role="tab" aria-selected="${ui.tab === 'team'}" data-a="tab" data-v="team">Mon équipe</button></div>` : '';
     const body = isHost && ui.tab === 'table' ? hostView(s) : playerView(s);
-    return `<div class="row topbar"><img class="fit logo-sm" src="${A('logo')}" alt="HOLD UP!"><span class="dim small" style="text-align:right">Salon <b>${esc(room.code)}</b> · ${esc(me.pseudo)} <button class="ghost mini" data-a="leave">Quitter</button></span></div>` + tabs + body;
+    return `<div class="row topbar"><img class="fit logo-sm" src="${A('logo')}" alt="HOLD UP!"><span class="who-me">${avatar(myAvatar(), 'av sm')}<span class="dim small">Salon <b>${esc(room.code)}</b> · ${esc(me.pseudo)}</span></span>${imgBtn('leave', null, 'btn-quitter', 'Quitter le salon', 'style="width:92px;flex:0 0 auto"')}</div>` + tabs + body;
   }
 
   function statusBar(g, extra = ''){ return `<div class="status"><span class="tag gold">Manche ${g.round}/${g.rounds}</span>${extra}<span class="pot"><img src="${A('coins')}" alt="Pot">${H.totalPot(g)}</span></div>`; }
@@ -272,7 +282,7 @@
       if (t.out) tags.push('<span class="tag red">Éliminée</span>'); else if (t.folded) tags.push('<span class="tag red">Couchée</span>'); else if (t.allIn) tags.push('<span class="tag gold">Tapis</span>');
       if (g.phase === 'answers' && g.answerQueue.includes(i) && !t.folded) tags.push(t.answered ? '<span class="tag ok">A répondu</span>' : '<span class="tag">Réfléchit…</span>');
       const bet = !t.out && t.street > 0 && (g.phase === 'bet' || g.phase === 'answers') ? `<span class="bet">mise ${t.street}</span>` : '';
-      const team = L.teams[i]; const who = team ? team.members.map(m => (m.id === team.captain ? crown : '') + esc(m.pseudo)).join(', ') : '';
+      const team = L.teams[i]; const who = team ? team.members.map(m => member(m, team.captain)).join('') : '';
       const ctl = opts.host && ((g.phase === 'bet' && g.toAct === i) || (g.phase === 'answers' && g.answerQueue.includes(i) && !t.answered && !t.folded))
         ? `<button class="warn mini" data-a="abandon" data-v="${i}">Coucher (absente)</button>` : '';
       return `<div class="seat ${i === g.toAct ? 'turn' : ''} ${t.out || t.folded ? 'out' : ''} ${i === mine ? 'me' : ''}"><span class="nm">${esc(t.name)}</span><span class="st">${chips(t.chips)}</span><div class="meta">${bet}${tags.join('')}${ctl}</div>${opts.members ? `<span class="who">${who}</span>` : ''}</div>`;
@@ -282,12 +292,12 @@
   function lobbyTeams(s, host){
     const L = s.lobby;
     if (!L.teams.length) return '<p class="dim">Aucune équipe pour l’instant.</p>';
-    return `<div class="seats">${L.teams.map((t, i) => `<div class="seat"><span class="nm">${esc(t.name)}</span><span class="st small dim">${t.members.length} joueur${t.members.length > 1 ? 's' : ''}</span><span class="who">${t.members.map(m => (m.id === t.captain ? crown : '') + esc(m.pseudo)).join(', ')}</span>${host ? `<div class="meta"><button class="ghost mini" data-a="kick" data-v="${i}">Retirer l’équipe</button></div>` : ''}</div>`).join('')}</div>`;
+    return `<div class="seats">${L.teams.map((t, i) => `<div class="seat"><span class="nm">${esc(t.name)}</span><span class="st small dim">${t.members.length} joueur${t.members.length > 1 ? 's' : ''}</span><span class="who">${t.members.map(m => member(m, t.captain)).join('')}</span>${host ? `<div class="meta"><button class="ghost mini" data-a="kick" data-v="${i}">Retirer l’équipe</button></div>` : ''}</div>`).join('')}</div>`;
   }
 
   function resultHtml(g){
     const r = g.result, q = g.question;
-    if (r.type === 'hidden') return `<span class="label">Aucun aveu</span><h2>${esc(g.teams[r.winner].name)} rafle ${r.total} jetons</h2><p class="dim">${r.street === 'pre' ? 'Tout le monde s’est couché.' : 'Les autres se sont couchés : la réponse reste secrète.'}</p>`;
+    if (r.type === 'hidden') return `<span class="label">Aucun aveu</span><img class="mystery" src="${A('card-mystere')}" alt="Réponse secrète"><h2>${esc(g.teams[r.winner].name)} rafle ${r.total} jetons</h2><p class="dim">${r.street === 'pre' ? 'Tout le monde s’est couché.' : 'Les autres se sont couchés : la réponse reste secrète.'}</p>`;
     const name = i => esc(g.teams[i].name);
     const pots = r.pots.map((p, k) => {
       const title = r.pots.length > 1 ? (k === 0 ? 'Pot principal' : `Pot annexe ${k}`) : 'Pot';
@@ -303,7 +313,7 @@
     const g = s.game, ranked = g.teams.map((t, i) => ({ t, i })).sort((a, b) => b.t.chips - a.t.chips);
     const shared = g.final && g.final.jackpotShared.length ? `<p class="notice small">Jackpot non réclamé partagé : ${g.final.jackpotShared.map(x => `${esc(g.teams[x.seat].name)} +${x.amount}`).join(', ')}.</p>` : '';
     const club = s.club ? (s.clubErr ? `<p class="err">${esc(s.clubErr)}</p>` : '<p class="dim small">Résultat enregistré dans le club.</p>') : '';
-    return `<span class="label">Fin de la soirée</span><h2>${esc(ranked[0].t.name)} gagne la table</h2><div>${ranked.map((x, k) => `<div class="rank"><span class="n">${k + 1}</span><span>${esc(x.t.name)}<span class="sub">${esc((s.lobby.teams[x.i] || { members: [] }).members.map(m => m.pseudo).join(', '))}</span></span><span>${chips(x.t.chips)}</span></div>`).join('')}</div>${shared}${club}`;
+    return `<img class="classement-head" src="${A('classement-head')}" alt="Classement"><h2 style="text-align:center">${esc(ranked[0].t.name)} gagne la table</h2><div>${ranked.map((x, k) => `<div class="rank"><span class="n">${k + 1}</span><span>${esc(x.t.name)}<span class="sub members">${(s.lobby.teams[x.i] || { members: [] }).members.map(m => member(m)).join('')}</span></span><span>${chips(x.t.chips)}</span></div>`).join('')}</div>${shared}${club}`;
   }
 
   function hostView(s){
@@ -439,6 +449,13 @@
           ui.view = room ? 'room' : 'home'; loadClubs(); break;
         }
         case 'editPseudo': ui.inputs.pseudo = me.pseudo; ui.view = 'pseudo'; break;
+        case 'avatar': ls.set('holdup-avatar', Number(v)); break;
+        case 'invite': {
+          const text = `Rejoins mon club HOLD UP! avec le code ${v} : ${location.origin}${location.pathname}`;
+          try { if (navigator.share){ await navigator.share({ title: 'HOLD UP!', text }); break; } } catch (e) { if (e && e.name === 'AbortError') break; }
+          try { await navigator.clipboard.writeText(text); } catch (e) {}
+          ui.invited = v; break;
+        }
         case 'home': ui.view = 'home'; break;
         case 'join': { const c = inp('joinCode').toUpperCase(); if (!/^[A-Z]{4}$/.test(c)){ ui.err = 'Le code fait 4 lettres.'; break; } await enterRoom(c); return; }
         case 'create': {
@@ -453,8 +470,8 @@
         case 'createClub': { const n = clean(inp('clubName'), 40); if (!n){ ui.err = 'Donne un nom au club.'; break; } await net.createClub(n); ui.inputs.clubName = ''; await loadClubs(true); return; }
         case 'tab': ui.tab = v; break;
         // joueur
-        case 'joinTeam': send({ type: 'join', team: v, pseudo: me.pseudo }); return;
-        case 'newTeam': { const n = clean(inp('teamName'), 24); if (!n){ ui.err = 'Donne un nom d’équipe.'; break; } ui.inputs.teamName = ''; send({ type: 'join', team: n, pseudo: me.pseudo }); return; }
+        case 'joinTeam': send({ type: 'join', team: v, pseudo: me.pseudo, avatar: myAvatar() }); return;
+        case 'newTeam': { const n = clean(inp('teamName'), 24); if (!n){ ui.err = 'Donne un nom d’équipe.'; break; } ui.inputs.teamName = ''; send({ type: 'join', team: n, pseudo: me.pseudo, avatar: myAvatar() }); return; }
         case 'leaveTeam': send({ type: 'leave' }); return;
         case 'captain': send({ type: 'captain' }); return;
         case 'bet': send(v === 'raise' ? { type: 'bet', action: 'raise', to: ui.raiseTo } : { type: 'bet', action: v }); return;

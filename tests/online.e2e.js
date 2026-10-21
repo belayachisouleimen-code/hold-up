@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
   await a1.fill('#teamName', 'Les Renards'); await click(a1, '[data-a=newTeam]'); await waitText(a1, 'Tu es capitaine');
   await b1.fill('#teamName', 'Les Pirates'); await b1.press('#teamName', 'Enter'); await waitText(b1, 'Tu es capitaine');
   await waitText(a2, 'Les Renards'); await click(a2, '[data-a=joinTeam][data-v="Les Renards"]'); await waitText(a2, 'Ton capitaine mise');
-  await waitText(host, 'Alice, Amine'); ok('lobby : 2 équipes, capitaine + coéquipier');
+  await waitText(host, 'AliceAmine'); ok('lobby : 2 équipes, capitaine + coéquipier');
   // Doublon de nom refusé côté hôte ? (même nom = rejoindre) — erreur : nom vide
   await host.selectOption('#setRounds', '6');
   await click(host, '[data-a=start]'); await waitText(host, 'Ouvrir les enchères'); await waitText(a1, 'L’annonce'); ok('partie lancée, annonce reçue');
@@ -80,8 +80,8 @@ const server = http.createServer((req, res) => {
     await click(host, '[data-a=next]'); await waitText(host, `Manche ${r}/6`); await click(host, '[data-a=open]');
     await host.waitForSelector('[data-a=abandon]'); await click(host, '[data-a=abandon]'); await waitText(host, 'rafle');
   }
-  await click(host, '[data-a=next]'); await waitText(host, 'Fin de la soirée'); await waitText(host, 'Résultat enregistré dans le club');
-  await waitText(a2, 'Fin de la soirée'); ok('fin de partie vue par tous, résultat enregistré');
+  await click(host, '[data-a=next]'); await waitText(host, 'gagne la table'); await waitText(host, 'Résultat enregistré dans le club');
+  await waitText(a2, 'gagne la table'); ok('fin de partie vue par tous, résultat enregistré');
 
   // Classement du club
   await click(a2, '[data-a=leave]'); await click(a2, '[data-a=clubs]'); await a2.fill('#clubCode', clubCode); await click(a2, '[data-a=joinClub]');

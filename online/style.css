@@ -114,12 +114,12 @@ h2{color:var(--gold)}
 .catcard.sm{width:62px}
 .catcard.big-cat{width:clamp(110px,14vw,170px)}
 .small-tease p{flex:1;min-width:0}
-.qcard{position:relative;width:100%;max-width:300px;aspect-ratio:268/355;margin:0 auto;background:url(assets/card-question.webp) center/100% 100% no-repeat;display:grid;place-items:center;padding:24% 15% 30%;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
-.qcard p{color:var(--parch-ink);font-family:var(--display);font-size:clamp(1.05rem,4.6vw,1.45rem);line-height:1.2;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
-.qcard.sm{max-width:220px}
-.qcard.sm p{font-size:1.02rem}
-.qcard.host{max-width:300px}
-.qcard.host p{font-size:clamp(1.2rem,2.4vw,1.9rem)}
+.qcard{position:relative;width:100%;max-width:380px;aspect-ratio:348/228;margin:0 auto;background:url(assets/card-question.webp) center/100% 100% no-repeat;display:grid;place-items:center;padding:12% 12% 11% 13%;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
+.qcard p{color:var(--parch-ink);font-family:var(--display);font-size:clamp(1.05rem,4.8vw,1.4rem);line-height:1.18;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
+.qcard.sm{max-width:340px}
+.qcard.sm p{font-size:clamp(1rem,4.4vw,1.25rem)}
+.qcard.host{max-width:560px}
+.qcard.host p{font-size:clamp(1.3rem,2.6vw,2.1rem)}
 .imgbtn{background:none;border:0;padding:0;min-height:0;border-radius:14px;position:relative;display:block;width:100%;line-height:0;color:inherit}
 .imgbtn img{width:100%;height:auto;display:block;filter:drop-shadow(0 4px 0 rgba(0,0,0,.35));transition:transform .08s}
 .imgbtn:active:not(:disabled) img{transform:translateY(3px) scale(.98)}
@@ -136,3 +136,24 @@ button.choice{border-color:var(--felt-line);background:rgba(255,255,255,.06)}
 .seat.turn{border-color:var(--gold);background:rgba(246,185,59,.12)}
 .roomcode{color:var(--gold);text-shadow:0 4px 0 var(--wood)}
 @media (prefers-reduced-motion:no-preference){.overlay img{animation:pop .45s cubic-bezier(.2,1.5,.4,1)}@keyframes pop{from{transform:scale(.55) rotate(-5deg);opacity:0}to{transform:none;opacity:1}}}
+
+/* ---------- Kit graphique v2 ---------- */
+.av{width:1.7em;height:auto;vertical-align:middle;flex:0 0 auto}
+.av.sm{width:36px}.av.md{width:56px}.av.lg{width:100%}
+.avatars{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.avpick{background:none;border:0;padding:2px;min-height:0;border-radius:50%;line-height:0;transition:transform .12s}
+.avpick[aria-checked="false"]{opacity:.55;filter:saturate(.6)}
+.avpick[aria-checked="true"]{transform:scale(1.08);filter:drop-shadow(0 0 8px rgba(246,185,59,.8))}
+.hello{display:flex;align-items:center;gap:10px}
+.hello p{flex:1;min-width:0}
+.who-me{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;justify-content:flex-end;text-align:right}
+.topbar{flex-wrap:nowrap}
+.member{display:inline-flex;align-items:center;gap:4px;margin-right:10px;white-space:nowrap}
+.member .av{width:28px}
+.seat .who{display:flex;flex-wrap:wrap;row-gap:4px}
+.rank .sub.members{display:flex;flex-wrap:wrap;margin-top:2px}
+.mystery{width:150px;height:auto;margin:0 auto;display:block;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
+.classement-head{display:block;width:min(300px,100%);height:auto;margin:0 auto}
+.club-banner{display:block;width:100%;max-width:440px;height:auto;margin:0 auto;border-radius:14px}
+.rank-badge{height:34px;width:auto;display:block}
+.lb td{vertical-align:middle}

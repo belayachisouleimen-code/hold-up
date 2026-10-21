@@ -25,11 +25,12 @@ Sans configuration Supabase, la version en ligne tourne en **mode démo** : chaq
 
 L'hôte peut aussi jouer depuis son appareil (onglet « Mon équipe »).
 
-## Kit graphique (v1)
-- `online/assets/` : 43 éléments découpés de la planche du kit (logo, cartes de catégories, jetons, boutons Suivre / Miser / Relancer / Se coucher / Passer / Valider / All in, jetons x2 / x5 / x10, cartes « Votre tour ! », « Bonne réponse ! », « Mauvaise réponse ! », carte question vierge, mascottes, icônes).
-- `scripts/slice-kit.py <planche.png>` : refait le découpage si la planche change (mêmes positions).
-- Utilisé dans la version en ligne : logo et mascottes à l'accueil, carte de catégorie à l'annonce, carte parchemin pour la question, boutons illustrés pour les enchères (x2 / x5 / x10 / All in = raccourcis de relance), Valider pour verrouiller la réponse, cartes plein écran sur le téléphone de l'équipe à son tour et au verdict, couronne pour le capitaine.
-- La version un seul téléphone garde pour l'instant l'ancien style.
+## Kit graphique (v2)
+- `online/assets/` : éléments découpés de la planche du kit 2 (logo, 8 cartes de catégories, jetons 1 à 500, boutons Miser / Suivre / Relancer / Se coucher / Valider / Passer / All in / Quitter / Inviter des amis, jetons x2 / x5 / x10, carte question en paysage, carte mystère, 6 avatars, badges de rang Bronze à Légende, cartes Bonne / Mauvaise réponse, bandeaux Classement et Mon club, icônes).
+- Repris du kit 1 : la carte « Votre tour ! » et les mascottes de l'accueil (absentes du kit 2).
+- `scripts/slice-kit.py <planche.png> <dossier>` : refait le découpage (positions du kit 2).
+- Dans le jeu : choix d'un avatar avec le pseudo (affiché dans les équipes, le classement et le club), carte mystère quand une équipe gagne sans révéler, badges de rang dans le classement du club (Argent dès 2 victoires, Or 5, Platine 10, Diamant 15, Légende 25), bouton Inviter des amis (partage ou copie du code du club), bouton Quitter.
+- Non utilisés pour l'instant : « La réponse était… » (illustration propre à une question), barres de chrono (pas encore de minuteur), pastille d'équipe.
 
 ## Architecture
 - `engine.js` : moteur de règles pur (source de vérité, partagé par les deux versions).
